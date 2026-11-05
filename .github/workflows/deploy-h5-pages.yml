@@ -1,0 +1,87 @@
+name: Deploy H5 to GitHub Pages
+
+# Manual only: Pages has no reverse proxy, so the H5 bundle must talk to the
+# API cross-origin. That works only when the Multica backend allows this
+# Pages origin through CORS_ALLOWED_ORIGINS. For a production deployment use
+# the nginx/Cloudflare/Netlify reverse-proxy setup described in README.
+on:
+  workflow_dispatch:
+    inputs:
+      api_base:
+        description: 'Multica API origin (leave empty to use repository variable TARO_APP_API_BASE)'
+        required: false
+        default: ''
+      base_path:
+        description: 'H5 base path; empty auto-detects /<repo>/ for project sites'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Project sites are served from /<repo>/; user sites from the root.
+      - name: Resolve base path
+        id: base
+        run: |
+          if [ -n "${{ inputs.base_path }}" ]; then
+            base="${{ inputs.base_path }}"
+          elif [ "${{ github.event.repository.name }}" = "${{ github.repository_owner }}.github.io" ]; then
+            base="/"
+          else
+            base="/${{ github.event.repository.name }}/"
+          fi
+          case "$base" in */) ;; *) base="$base/" ;; esac
+          echo "path=$base" >> "$GITHUB_OUTPUT"
+          echo "Using H5 base path: $base"
+
+      - name: Build H5
+        env:
+          TARO_APP_H5_BASE: ${{ steps.base.outputs.path }}
+          TARO_APP_API_BASE: ${{ inputs.api_base || vars.TARO_APP_API_BASE }}
+        run: npm run build:h5
+
+      # GitHub Pages has no SPA rewrite rule. Serving the shell as 404.html
+      # keeps deep links working (the status code is 404, the app still boots).
+      - name: Add SPA fallback
+        run: cp dist/index.html dist/404.html
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

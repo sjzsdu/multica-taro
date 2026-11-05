@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push to the same branch supersedes the in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  verify:
+    name: Typecheck and H5 build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      # .npmrc pins legacy-peer-deps: @babel/preset-env@8 declares @babel/core@8
+      # while babel-preset-taro still resolves @babel/core@7.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build H5
+        run: npm run build:h5
+
+      - name: Upload H5 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: h5-dist
+          path: dist
+          retention-days: 14
+
+  weapp:
+    name: WeChat mini program build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build WeChat mini program
+        run: npm run build:weapp
+
+      # project.config.json is the source of truth for the DevTools project
+      # (miniprogramRoot: dist/). Keep it next to the artifact so the zip can
+      # be opened directly.
+      - name: Upload WeChat artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: weapp-dist
+          path: |
+            dist
+            project.config.json
+          retention-days: 14

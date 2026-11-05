@@ -1,0 +1,32 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      taro:
+        patterns:
+          - '@tarojs/*'
+      react:
+        patterns:
+          - react
+          - react-dom
+          - '@types/react'
+    ignore:
+      # babel-preset-taro pins @babel/core@7 while @babel/preset-env@8 wants
+      # @babel/core@8; letting Dependabot bump these alone produces unusable PRs.
+      - dependency-name: '@babel/preset-env'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@babel/preset-react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@babel/preset-typescript'
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5

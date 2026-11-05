@@ -1,0 +1,48 @@
+# Multica 移动端（Taro H5）— 静态站点 + 同源 API 反代，接入 traefik-public。
+#
+# 对外域名：https://${MULTICA_TARO_DOMAIN}（默认 m.wnbgj.com）
+#   - 静态资源、SPA 路由 → 本容器 nginx
+#   - /api /auth /ws → http://multica-backend:8080（同网络容器名，不经过 Next）
+#
+# 同源反代的好处：H5 以相对路径请求 API，浏览器不会跨域，
+# 因此不需要把本域名加入后端的 CORS_ALLOWED_ORIGINS。
+#
+# 镜像由 multica-taro 仓库 GitHub Actions 构建推送（sjzsdu/multica-taro），
+# 服务器只 pull。启动方式：./setup.sh（根 run.sh 会自动发现本目录）。
+
+services:
+  web:
+    image: ${MULTICA_TARO_IMAGE:-sjzsdu/multica-taro}:${MULTICA_TARO_TAG:-latest}
+    container_name: multica-taro
+    restart: unless-stopped
+    environment:
+      # nginx 模板用 envsubst 注入，支持 backend 容器重建后换 IP。
+      API_UPSTREAM: ${MULTICA_TARO_API_UPSTREAM:-http://multica-backend:8080}
+    networks:
+      - traefik-public
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.multica-taro.rule=Host(`${MULTICA_TARO_DOMAIN}`)"
+      - "traefik.http.routers.multica-taro.entrypoints=websecure"
+      - "traefik.http.routers.multica-taro.tls=true"
+      - "traefik.http.routers.multica-taro.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.multica-taro.middlewares=multica-taro-headers"
+      # 显式绑定 service，避免 Traefik 自动分配时找不到端口。
+      - "traefik.http.routers.multica-taro.service=multica-taro"
+      - "traefik.http.services.multica-taro.loadbalancer.server.port=80"
+      # 基础安全头：HSTS + 禁止嗅探/嵌套。
+      - "traefik.http.middlewares.multica-taro-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.multica-taro-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.multica-taro-headers.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.multica-taro-headers.headers.frameDeny=true"
+      - "traefik.http.middlewares.multica-taro-headers.headers.referrerPolicy=strict-origin-when-cross-origin"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+networks:
+  traefik-public:
+    external: true

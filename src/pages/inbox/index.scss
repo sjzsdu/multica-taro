@@ -1,0 +1,153 @@
+.inbox {
+  &__menu-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+
+  &__menu-dot {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--text-secondary);
+  }
+
+  &__filters {
+    display: flex;
+    align-items: center;
+    margin-top: 14px;
+  }
+
+  &__list {
+    padding: 0 16px;
+    box-sizing: border-box;
+  }
+
+  &__rows {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  &__bottom-space {
+    height: calc(24px + env(safe-area-inset-bottom));
+  }
+}
+
+.inbox-row {
+  position: relative;
+  display: flex;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  transition: transform 0.14s ease;
+
+  &:active {
+    transform: scale(0.992);
+  }
+
+  &.is-unread {
+    border-color: #d7e3ff;
+  }
+
+  &__accent {
+    width: 4px;
+    flex-shrink: 0;
+    opacity: 0.85;
+  }
+
+  &__main {
+    flex: 1;
+    min-width: 0;
+    padding: 14px 14px 12px 13px;
+  }
+
+  &__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  &__type {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    letter-spacing: 0.2px;
+  }
+
+  &__time {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+  }
+
+  &__title {
+    display: block;
+    margin-top: 6px;
+    font-size: 15px;
+    line-height: 1.45;
+    color: var(--text);
+    font-weight: 400;
+
+    &.is-unread {
+      font-weight: 650;
+    }
+  }
+
+  &__body {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    margin-top: 5px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+  }
+
+  &__bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+    gap: 10px;
+  }
+
+  &__meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  &__system {
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  &__action {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    padding: 2px 0;
+
+    &:active {
+      color: var(--primary);
+    }
+  }
+}

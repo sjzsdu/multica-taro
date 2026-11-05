@@ -1,0 +1,67 @@
+name: Upload WeChat mini program
+
+# Manual only. Requires repository secrets:
+#   WEAPP_APPID        - WeChat mini program AppID
+#   WEAPP_PRIVATE_KEY  - upload key from the WeChat MP admin console
+# The key is written to a git-ignored file and removed with the runner.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (x.y.z)'
+        required: true
+        default: '0.1.0'
+      desc:
+        description: 'Upload description'
+        required: false
+        default: 'Multica Taro'
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  upload:
+    name: Build and upload
+    runs-on: ubuntu-latest
+    env:
+      WEAPP_APPID: ${{ secrets.WEAPP_APPID }}
+      WEAPP_PRIVATE_KEY: ${{ secrets.WEAPP_PRIVATE_KEY }}
+      WEAPP_VERSION: ${{ inputs.version }}
+      WEAPP_DESC: ${{ inputs.desc }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Check secrets
+        if: env.WEAPP_APPID == '' || env.WEAPP_PRIVATE_KEY == ''
+        run: |
+          echo "::error::Configure WEAPP_APPID and WEAPP_PRIVATE_KEY repository secrets before uploading."
+          exit 1
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build WeChat mini program
+        run: npm run build:weapp
+
+      - name: Prepare upload credentials
+        run: node scripts/prepare-weapp-ci.mjs
+
+      - name: Install miniprogram-ci
+        run: npm install --no-save --legacy-peer-deps miniprogram-ci
+
+      - name: Upload experience build
+        run: node scripts/upload-weapp.mjs
+
+      - name: Clean up key
+        if: always()
+        run: rm -f private.upload.key

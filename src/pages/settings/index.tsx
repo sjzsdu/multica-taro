@@ -1,0 +1,104 @@
+import { View, Text, ScrollView } from '@tarojs/components'
+import Taro from '@tarojs/taro'
+import { Avatar, Chevron, PageHeader, Spinner } from '@/components/ui'
+import { useAuthGuard } from '@/hooks/use-auth-guard'
+import { useArchivedInbox, useUnreadSummary } from '@/hooks/use-api'
+import { useAuthStore } from '@/stores/auth-store'
+import { useWorkspaceStore } from '@/stores/workspace-store'
+import './index.scss'
+
+export default function SettingsPage() {
+  const status = useAuthGuard()
+  const user = useAuthStore((state) => state.user)
+  const logout = useAuthStore((state) => state.logout)
+  const workspace = useWorkspaceStore((state) => state.currentWorkspace)
+  const unread = useUnreadSummary()
+  const inbox = useArchivedInbox()
+
+  const workspaceUnread = workspace
+    ? (unread.data ?? []).find((entry) => entry.workspace_id === workspace.id)?.count ?? 0
+    : 0
+  const archivedCount = inbox.data?.length ?? 0
+
+  const handleLogout = async () => {
+    const result = await Taro.showModal({
+      title: '退出登录',
+      content: '退出后需要重新用邮箱验证码登录。',
+      confirmText: '退出',
+      confirmColor: '#D92D20',
+    })
+    if (!result.confirm) return
+    await logout()
+    void Taro.reLaunch({ url: '/pages/login/index' })
+  }
+
+  if (status === 'loading') return <Spinner label='正在恢复会话…' />
+
+  return (
+    <View className='screen settings'>
+      <PageHeader title='我的' subtitle='账号与工作区设置' />
+
+      <ScrollView className='screen__body settings__scroll' scrollY>
+        <View className='settings__profile'>
+          <Avatar src={user?.avatar_url} name={user?.name || user?.email} size='lg' />
+          <View className='settings__profile-info'>
+            <Text className='settings__name'>{user?.name || '未命名用户'}</Text>
+            <Text className='settings__email'>{user?.email}</Text>
+          </View>
+        </View>
+
+        <View className='settings__group'>
+          <Text className='settings__group-title'>工作区</Text>
+          <View className='settings__card'>
+            <View
+              className='settings__row'
+              onClick={() => void Taro.navigateTo({ url: '/pages/workspace/index' })}
+            >
+              <Text className='settings__row-label'>当前工作区</Text>
+              <View className='settings__row-value'>
+                <Text className='settings__row-text'>{workspace?.name || '未选择'}</Text>
+                {workspaceUnread > 0 ? (
+                  <Text className='settings__pill'>{workspaceUnread}</Text>
+                ) : null}
+                <Chevron />
+              </View>
+            </View>
+            <View
+              className='settings__row'
+              onClick={() => void Taro.navigateTo({ url: '/pages/inbox-archive/index' })}
+            >
+              <Text className='settings__row-label'>已归档通知</Text>
+              <View className='settings__row-value'>
+                <Text className='settings__row-text'>
+                  {archivedCount > 0 ? `${archivedCount} 条` : '查看'}
+                </Text>
+                <Chevron />
+              </View>
+            </View>
+          </View>
+        </View>
+
+        <View className='settings__group'>
+          <Text className='settings__group-title'>关于</Text>
+          <View className='settings__card'>
+            <View className='settings__row'>
+              <Text className='settings__row-label'>客户端版本</Text>
+              <Text className='settings__row-text'>0.1.0</Text>
+            </View>
+            <View className='settings__row'>
+              <Text className='settings__row-label'>服务端</Text>
+              <Text className='settings__row-text'>multica.wnbgj.com</Text>
+            </View>
+          </View>
+        </View>
+
+        <View className='settings__logout' onClick={() => void handleLogout()}>
+          <Text className='settings__logout-text'>退出登录</Text>
+        </View>
+
+        <Text className='settings__footnote'>Multica · 人和智能体协作处理任务</Text>
+        <View className='settings__bottom-space' />
+      </ScrollView>
+    </View>
+  )
+}

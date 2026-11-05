@@ -1,0 +1,170 @@
+/* ---------------------------------------------------------------------------
+ * Multica Mobile design tokens
+ *
+ * Values follow the Multica marketing/product palette: neutral greys for
+ * structure, a single blue accent for interaction, and semantic colours only
+ * for state (status, priority, severity).
+ * ------------------------------------------------------------------------- */
+
+/* The token block is emitted for `:root` (H5, where there is no <page>) and
+ * for `page` (mini programs). Keeping them as separate rules avoids a selector
+ * list that a mini-program compiler could drop wholesale. */
+@mixin design-tokens {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-muted: #f9fafb;
+  --surface-sunken: #f2f4f7;
+  --text: #101828;
+  --text-secondary: #475467;
+  --text-tertiary: #98a2b3;
+  --border: #eaecf0;
+  --border-strong: #d0d5dd;
+  --primary: #4c84ff;
+  --primary-strong: #2f6bff;
+  --primary-soft: #eef4ff;
+  --danger: #d92d20;
+  --danger-soft: #fef3f2;
+  --success: #12b76a;
+  --warning: #f79009;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 6px 20px rgba(16, 24, 40, 0.04);
+  --shadow-sheet: 0 -12px 40px rgba(16, 24, 40, 0.18);
+}
+
+:root {
+  @include design-tokens;
+}
+
+page {
+  @include design-tokens;
+
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica,
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: #f5f6f8;
+  color: #101828;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica,
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Taro's H5 page shells must not double-scroll: every page owns its own
+ * ScrollView and lays out at exactly viewport height. */
+.taro_page,
+.taro_page_stationed {
+  height: 100vh !important;
+  min-height: 100vh !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.taro-tabbar__panel {
+  height: 100%;
+}
+
+.taro-tabbar__tabbar {
+  border-top: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.96) !important;
+  backdrop-filter: blur(12px);
+}
+
+.taro-tabbar__tabbar .weui-tabbar__item {
+  color: #98a2b3;
+}
+
+.taro-tabbar__tabbar .weui-tabbar__item.weui-bar__item_on {
+  color: var(--primary);
+}
+
+/* Utility layout ---------------------------------------------------------- */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  background: var(--bg);
+}
+
+.screen__body {
+  flex: 1;
+  min-height: 0;
+}
+
+.screen__scroll {
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.safe-bottom {
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+}
+
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+.text-tertiary {
+  color: var(--text-tertiary);
+}
+
+.muted {
+  opacity: 0.7;
+}
+
+/* Shared form primitives -------------------------------------------------- */
+
+.field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.text-field {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  background: var(--surface-sunken);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.text-field--multiline {
+  min-height: 96px;
+}
+
+.input-placeholder {
+  color: var(--text-tertiary);
+}
+
+/* Hide native scrollbars on horizontal chip rails while keeping them
+ * scrollable by touch / trackpad. */
+::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
