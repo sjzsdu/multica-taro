@@ -12,6 +12,7 @@ declare module '*.sass';
 declare module '*.styl';
 
 declare const __API_BASE_URL__: string;
+declare const __H5_BASE__: string;
 
 declare namespace NodeJS {
   interface ProcessEnv {

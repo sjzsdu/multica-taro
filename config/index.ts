@@ -7,7 +7,8 @@ export default defineConfig(async (merge) => {
   // Sub-path deployments (GitHub Pages project sites, CDN prefixes) need the
   // asset public path and the router basename to agree, otherwise lazy chunks
   // and deep links both 404.
-  const h5Base = process.env.TARO_APP_H5_BASE || '/'
+  const rawH5Base = process.env.TARO_APP_H5_BASE || '/'
+  const h5Base = rawH5Base.endsWith('/') ? rawH5Base : `${rawH5Base}/`
   const baseConfig = {
     projectName: 'multica-taro',
     date: '2026-11-05',
@@ -25,18 +26,41 @@ export default defineConfig(async (merge) => {
       // H5 serves from the same origin and relies on a reverse proxy for
       // /api and /auth; native builds must point at an absolute origin.
       __API_BASE_URL__: JSON.stringify(process.env.TARO_APP_API_BASE || ''),
+      // Needed at runtime for the PWA worker scope: a relative manifest link
+      // would resolve against the SPA's current URL after pushState.
+      __H5_BASE__: JSON.stringify(h5Base),
     },
     alias: {
       '@': path.resolve(__dirname, '..', 'src'),
     },
     copy: {
-      patterns: [],
+      patterns: [
+        // PWA shell: manifest, service worker and icons live next to
+        // index.html in the output so their relative URLs keep working on a
+        // sub-path deployment (GitHub Pages project sites).
+        { from: 'src/pwa/', to: 'dist/' },
+      ],
       options: {},
     },
     framework: 'react',
     compiler: {
       type: 'webpack5',
       prebundle: { enable: false },
+    },
+    // Taro's default terser config sets quote_keys + keep_quoted_props, which
+    // mangles ES class private fields (#name) into invalid `#"name"` tokens in
+    // production bundles. Keep the defaults otherwise, but leave quoted keys
+    // alone so modern class syntax survives minification.
+    terser: {
+      enable: true,
+      config: {
+        output: {
+          comments: false,
+          keep_quoted_props: false,
+          quote_keys: false,
+          beautify: false,
+        },
+      },
     },
     mini: {
       postcss: {
@@ -74,7 +98,10 @@ export default defineConfig(async (merge) => {
       },
       router: {
         mode: 'browser',
-        basename: h5Base,
+        // Taro's basename is a prefix, not a full public path: passing "/"
+        // makes the router unable to match the home route. Only set it for
+        // real sub-path deployments, and without the trailing slash.
+        ...(h5Base !== '/' ? { basename: h5Base.replace(/\/$/, '') } : {}),
       },
     },
   }

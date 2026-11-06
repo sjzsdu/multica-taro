@@ -59,6 +59,42 @@ GitHub Pages 更适合这个后端的根本原因（Pages 没有反代能力）�
 | 停止 | `./cleanup.sh` |
 | 看日志 | `docker logs -f multica-taro` |
 
+## 访问控制（可选）
+
+默认不启用——应用本身有登录。需要把访问收紧到固定出口 IP 时：
+
+1. 在 `.env` 填 CIDR（逗号分隔）：
+
+   ```bash
+   MULTICA_TARO_ALLOWED_CIDRS=1.2.3.0/24,10.0.0.0/8
+   ```
+
+2. 重跑 `./setup.sh`。脚本会自动追加 `docker-compose.access.yml`，在 Traefik 上挂
+   `ipallowlist` 中间件（同时保留原有的安全响应头）。
+3. 关闭：把变量清空，再跑 `./setup.sh`。
+
+注意：
+
+- 只影响 `MULTICA_TARO_DOMAIN` 这个站点，不影响 `multica.wnbgj.com`。
+- 家宽/办公出口 IP 变化会导致自己也被挡；先确认固定出口再启用。
+- 被挡的请求由 Traefik 直接返回 403，容器日志里看不到。
+
+如果出口 IP 不固定，也可以改用 Basic Auth（与 IP allowlist 二选一，或叠加）：
+
+```yaml
+# docker-compose.access.yml 的 labels 改为：
+- "traefik.http.routers.multica-taro.middlewares=multica-taro-headers,multica-taro-basic"
+- "traefik.http.middlewares.multica-taro-basic.basicauth.users=${MULTICA_TARO_BASIC_AUTH_USERS}"
+```
+
+生成一行用户（密码里的 `$` 在 compose 文件中需写成 `$$`）：
+
+```bash
+printf '%s:%s\n' admin "$(openssl passwd -apr1 'change-me')" | sed 's/\$/$$/g'
+```
+
+把结果放进 `.env.secrets`（不放 `.env`），`setup.sh` 会在读取 `.env` 后自动加载它。
+
 ## 排障
 
 - **502 / 登录失败**：`docker logs --tail 50 multica-backend` 确认后端是否健康；
@@ -73,6 +109,6 @@ GitHub Pages 更适合这个后端的根本原因（Pages 没有反代能力）�
 
 ## 不需要的东西
 
-- 不需要 `.env.secrets`：这是纯静态站点 + 反代，没有随机密钥。
+- `.env.secrets` 不是必需的：默认的静态托管 + IP allowlist 没有随机密钥；只有额外启用 Basic Auth 时才需要放一行 htpasswd。
 - 不需要修改 `traefik.yml`：本服务通过 Docker provider 的 labels 自动注册。
 - 不需要改 `CORS_ALLOWED_ORIGINS`：同源反代。

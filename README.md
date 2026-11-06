@@ -15,23 +15,30 @@
 | 派发任务 | 两种模式：直接创建（可指派成员/智能体/小队）与「派发给智能体」（一句话 prompt 走 `quick-create`，由智能体建单并执行） |
 | 工作区 | 多工作区切换、跨工作区未读角标 |
 | 设置 | 账号信息、工作区入口、归档通知、退出登录 |
+| PWA | 可安装到主屏（standalone）、离线 shell、静态资源缓存；H5 生产构建自动注册 |
+| 实时更新 | 生产环境通过 WebSocket 接收收件箱 / 任务 / 评论 / 运行状态事件并失效对应缓存 |
 
 ## 技术栈与取舍
 
 - **UI**：Taro 原生组件 + 自建设计系统（`src/components/ui.tsx`、`src/app.scss`）。没有引入 antd-mobile / NutUI：H5 场景下它们可用，但会绑定 `react-dom`，小程序端无法编译，且包体明显增大。自建组件只依赖 `@tarojs/components`，H5 与小程序共用。
-- **服务端状态**：TanStack Query（缓存、失效、无限分页、乐观更新）。
+- **服务端状态**：TanStack Query（缓存、失效、无限分页、乐观更新）。WebSocket 事件只做失效，不直接改服务端缓存。
 - **客户端状态**：Zustand 只保存会话、当前工作区等平台状态，不缓存服务端数据。
+- **PWA**：手写 manifest + service worker（`src/pwa/`），没有引入 Workbox 插件，避免构建链依赖；API 请求永不缓存。
 - **类型**：手工对齐 Multica monorepo 的 `packages/core/types` 与 `packages/core/api/client.ts`（状态/优先级是开放字符串，自定义状态有回退展示）。
 
 ## 目录
 
 ```
-config/                 Taro 构建配置（dev 代理、API 基地址注入）
+config/                 Taro 构建配置（dev 代理、API/基路径注入）
 src/api/                ApiClient、类型、各资源端点
 src/hooks/              Query hooks、登录守卫、工作区引导
 src/stores/             auth / workspace（Zustand）
+src/realtime/           WebSocket 客户端与事件 → Query 失效桥接
+src/pwa/                manifest、service worker、PWA 图标
 src/components/ui.tsx   通用 UI 组件（Avatar、StatusBadge、OptionSheet…）
 src/pages/              inbox / issues / issue-detail / create / workspace / settings / inbox-archive / login
+deploy/multica-taro/    deploy 仓库的 Traefik 部署模板（compose/setup/cleanup/访问控制）
+docker/                 nginx 模板（静态站点 + /api /auth /ws 反代）
 ```
 
 ## 本地开发
@@ -46,6 +53,8 @@ npm run build:h5
 ```
 
 开发服务器通过 `config/dev.ts` 的 webpack proxy 把 `/api`、`/auth` 转发到 `https://multica.wnbgj.com`，因此浏览器同源、无 CORS 问题。
+
+> 开发环境不注册 service worker，也不启用实时推送：webpack-dev-server 的 HMR 连接占用 `/ws`，无法可靠代理后端 socket。两项能力在生产构建 + nginx 反代下生效。
 
 ## 连接后端与部署
 
@@ -83,6 +92,7 @@ TARO_APP_H5_BASE=/multica-taro/ npm run build:h5
 | `.github/workflows/release.yml` | 推送 `v*` tag 或手动 | 构建 `h5` / `weapp` 产物 zip，附到 GitHub Release |
 | `.github/workflows/deploy-h5-pages.yml` | 手动 | 构建 H5 并部署到 GitHub Pages（可选，见下方限制） |
 | `.github/workflows/weapp-upload.yml` | 手动 | 构建并用 `miniprogram-ci` 上传微信体验版（需要 secrets） |
+| `.github/workflows/docker-publish.yml` | 推送 `v*` tag 或手动 | 构建 `linux/amd64` + `linux/arm64` 镜像推 Docker Hub，并用 Trivy 扫描、上传 SARIF |
 | `.github/dependabot.yml` | 每周 / 每月 | 依赖与 GitHub Actions 更新 PR |
 
 产物位置：
@@ -106,8 +116,8 @@ TARO_APP_H5_BASE=/multica-taro/ npm run build:h5
 
 - `Dockerfile`：Node 构建 H5 → nginx 托管，运行时镜像不含 Node。
 - `docker/nginx.conf.template`：静态文件 + SPA fallback；`/api`、`/auth`、`/ws` 同源反代到 `multica-backend:8080`。
-- `.github/workflows/docker-publish.yml`：推送 `v*` tag 时构建并推送镜像 `sjzsdu/multica-taro`。
-- `deploy/multica-taro/`：deploy 仓库的 `docker-compose.yml` / `setup.sh` / `cleanup.sh` / `.env.example` 模板。
+- `.github/workflows/docker-publish.yml`：推送 `v*` tag 时构建并推送多架构镜像 `sjzsdu/multica-taro`（amd64 + arm64），并做 Trivy 扫描。
+- `deploy/multica-taro/`：deploy 仓库的 `docker-compose.yml` / `setup.sh` / `cleanup.sh` / `.env.example` 模板，可选 `docker-compose.access.yml`（Traefik IP allowlist）。
 
 由于 H5 与 API 同源，**不需要**把部署域名加入后端 `CORS_ALLOWED_ORIGINS`，也不需要 GitHub Pages。接入步骤（DNS、Docker Hub secrets、部署/回滚）见 `deploy/multica-taro/README.md`。
 
@@ -121,7 +131,8 @@ TARO_APP_H5_BASE=/multica-taro/ npm run build:h5
 
 ## 已知限制
 
-- 暂无 WebSocket 实时推送：收件箱与任务列表通过页面重新可见时刷新 + 下拉刷新更新。
+- 实时推送只在生产构建启用；开发模式因 HMR 占用 `/ws` 不连接（见「本地开发」）。
+- PWA 需要 HTTPS（`localhost` 除外）；service worker 只缓存 shell 与静态资源，API 响应永不缓存。
 - 未实现附件上传、富文本 / Markdown 渲染；描述与评论按纯文本展示。
 - H5 没有浏览器原生导航栏，子页面（详情、新建、工作区、归档）使用自绘返回栏；小程序端同样使用自绘栏以保持一致。
 - 客户端不创建/加入工作区，工作区需先在网页端创建。

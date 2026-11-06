@@ -1,0 +1,13 @@
+# 可选 overlay：在 Traefik 层加 IP allowlist（不修改主 compose）。
+#
+# 启用方式：在 .env 设置 MULTICA_TARO_ALLOWED_CIDRS（逗号分隔 CIDR），
+# setup.sh 检测到非空值会自动追加本文件。
+#
+# 注意：Traefik v2.11 的中间件名是 ipallowlist（旧版 ipwhitelist 已弃用）。
+# 这里必须重写 routers 的 middlewares 列表，把原有的 security headers 一并保留。
+
+services:
+  web:
+    labels:
+      - "traefik.http.routers.multica-taro.middlewares=multica-taro-headers,multica-taro-allowlist"
+      - "traefik.http.middlewares.multica-taro-allowlist.ipallowlist.sourceRange=${MULTICA_TARO_ALLOWED_CIDRS}"

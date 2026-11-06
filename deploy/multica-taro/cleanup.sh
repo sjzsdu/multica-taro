@@ -15,8 +15,14 @@ fi
 # compose 标签里有 ${MULTICA_TARO_DOMAIN} 插值，down 时同样需要变量
 set -a
 [ -f "$ENV_FILE" ] && source "$ENV_FILE"
+[ -f "./.env.secrets" ] && source "./.env.secrets"
 set +a
 
+COMPOSE_ARGS=(-f "$COMPOSE_FILE")
+if [ -n "${MULTICA_TARO_ALLOWED_CIDRS:-}" ] && [ -f "./docker-compose.access.yml" ]; then
+    COMPOSE_ARGS+=(-f "./docker-compose.access.yml")
+fi
+
 echo "Stopping Multica mobile H5 ..."
-docker compose -f "$COMPOSE_FILE" down
+docker compose "${COMPOSE_ARGS[@]}" down
 echo "Cleanup completed."

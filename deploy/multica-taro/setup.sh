@@ -33,13 +33,28 @@ if ! docker network inspect "$NETWORK_NAME" >/dev/null 2>&1; then
 fi
 
 # 加载配置供 compose 标签插值（与仓库内其他服务一致）
+# .env.secrets 可选：仅在使用 Basic Auth 等需要秘密的 overlay 时创建。
 set -a
 source "$ENV_FILE"
+if [ -f "./.env.secrets" ]; then
+    source "./.env.secrets"
+fi
 set +a
 
 if [ -z "${MULTICA_TARO_DOMAIN:-}" ]; then
     echo "Error: MULTICA_TARO_DOMAIN 不能为空"
     exit 1
+fi
+
+# 访问控制是可选的 overlay：只有显式配置了 CIDR 才追加，默认不启用。
+COMPOSE_ARGS=(-f "$COMPOSE_FILE")
+if [ -n "${MULTICA_TARO_ALLOWED_CIDRS:-}" ]; then
+    if [ ! -f "./docker-compose.access.yml" ]; then
+        echo "Error: MULTICA_TARO_ALLOWED_CIDRS 已设置，但 docker-compose.access.yml 不存在"
+        exit 1
+    fi
+    COMPOSE_ARGS+=(-f "./docker-compose.access.yml")
+    echo "🔒 已启用 IP allowlist：${MULTICA_TARO_ALLOWED_CIDRS}"
 fi
 
 if ! docker ps --format '{{.Names}}' | grep -qx "$BACKEND_CONTAINER"; then
@@ -48,10 +63,10 @@ if ! docker ps --format '{{.Names}}' | grep -qx "$BACKEND_CONTAINER"; then
 fi
 
 echo "Pulling ${MULTICA_TARO_IMAGE:-sjzsdu/multica-taro}:${MULTICA_TARO_TAG:-latest} ..."
-docker compose -f "$COMPOSE_FILE" pull
+docker compose "${COMPOSE_ARGS[@]}" pull
 
 echo "Starting Multica mobile H5 ..."
-docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
+docker compose "${COMPOSE_ARGS[@]}" up -d --remove-orphans
 
 echo "Waiting for container health check ..."
 STATUS=""

@@ -32,6 +32,17 @@ server {
         add_header Cache-Control "no-cache, must-revalidate";
     }
 
+    # PWA manifest and worker must revalidate so updates roll out immediately.
+    location = /manifest.webmanifest {
+        default_type application/manifest+json;
+        add_header Cache-Control "no-cache";
+    }
+
+    location = /sw.js {
+        add_header Cache-Control "no-cache";
+        add_header Service-Worker-Allowed "/";
+    }
+
     # Same-origin API. Keeping this on the same host means the Multica backend
     # does not need this domain in CORS_ALLOWED_ORIGINS.
     location /api/ {

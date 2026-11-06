@@ -4,6 +4,8 @@ import { queryClient } from './utils/query-client'
 import { useAuthStore, installAuthInterceptor } from '@/stores/auth-store'
 import { useWorkspaceStore } from '@/stores/workspace-store'
 import { useWorkspaceBootstrap } from '@/hooks/use-workspace-bootstrap'
+import { registerServiceWorker } from '@/utils/register-sw'
+import { useRealtime } from '@/realtime/realtime-bridge'
 import './app.scss'
 
 function Bootstrap({ children }: PropsWithChildren) {
@@ -14,9 +16,11 @@ function Bootstrap({ children }: PropsWithChildren) {
     installAuthInterceptor()
     initWorkspace()
     void initAuth()
+    registerServiceWorker()
   }, [initAuth, initWorkspace])
 
   useWorkspaceBootstrap()
+  useRealtime()
 
   return <>{children}</>
 }
