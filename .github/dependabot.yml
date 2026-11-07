@@ -5,7 +5,8 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 5
+    # Keep the queue small: at most 3 npm PRs at a time.
+    open-pull-requests-limit: 3
     groups:
       taro:
         patterns:
@@ -16,8 +17,21 @@ updates:
           - react-dom
           - '@types/react'
     ignore:
-      # babel-preset-taro pins @babel/core@7 while @babel/preset-env@8 wants
-      # @babel/core@8; letting Dependabot bump these alone produces unusable PRs.
+      # Major upgrades need a dedicated migration. Left in the weekly queue
+      # they just produce PRs that cannot be merged safely (React 19 against
+      # Taro 4.3, TypeScript 7, Babel 8, webpack major).
+      - dependency-name: react
+        update-types: ['version-update:semver-major']
+      - dependency-name: react-dom
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      - dependency-name: webpack
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@babel/runtime'
+        update-types: ['version-update:semver-major']
       - dependency-name: '@babel/preset-env'
         update-types: ['version-update:semver-major']
       - dependency-name: '@babel/preset-react'
@@ -29,4 +43,9 @@ updates:
     directory: /
     schedule:
       interval: monthly
-    open-pull-requests-limit: 5
+    # All Actions bumps land in one grouped PR instead of one PR per action.
+    open-pull-requests-limit: 1
+    groups:
+      github-actions:
+        patterns:
+          - '*'
