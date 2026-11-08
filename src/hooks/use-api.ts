@@ -35,6 +35,9 @@ export const queryKeys = {
     ['workspace', slug, 'members', workspaceId] as const,
   issues: (slug: string | null) => ['workspace', slug, 'issues'] as const,
   issueList: (slug: string | null, filters: unknown) => ['workspace', slug, 'issues', 'list', filters] as const,
+  childProgress: (slug: string | null) => ['workspace', slug, 'issues', 'child-progress'] as const,
+  issueChildren: (slug: string | null, id: string) =>
+    ['workspace', slug, 'issue', id, 'children'] as const,
   issue: (slug: string | null, id: string) => ['workspace', slug, 'issue', id] as const,
   timeline: (slug: string | null, id: string) => ['workspace', slug, 'issue', id, 'timeline'] as const,
   inbox: (slug: string | null) => ['workspace', slug, 'inbox'] as const,
@@ -158,7 +161,10 @@ export function useActors() {
   }
 }
 
-export function useIssues(filters: Omit<ListIssuesParams, 'limit' | 'offset'>) {
+export function useIssues(
+  filters: Omit<ListIssuesParams, 'limit' | 'offset'>,
+  enabled = true,
+) {
   const slug = useSlug()
   return useInfiniteQuery({
     queryKey: queryKeys.issueList(slug, filters),
@@ -171,8 +177,28 @@ export function useIssues(filters: Omit<ListIssuesParams, 'limit' | 'offset'>) {
       if (last.issues.length === 0) return undefined
       return loaded
     },
-    enabled: !!slug,
+    enabled: enabled && !!slug,
     staleTime: 15_000,
+  })
+}
+
+export function useIssueChildren(id: string, enabled = true) {
+  const slug = useSlug()
+  return useQuery({
+    queryKey: queryKeys.issueChildren(slug, id),
+    queryFn: () => issuesApi.listChildIssues(id).then((res) => res.issues),
+    enabled: enabled && !!id && !!slug,
+    staleTime: 15_000,
+  })
+}
+
+export function useChildProgress() {
+  const slug = useSlug()
+  return useQuery({
+    queryKey: queryKeys.childProgress(slug),
+    queryFn: () => issuesApi.getChildProgress().then((res) => res.progress),
+    enabled: !!slug,
+    staleTime: 30_000,
   })
 }
 
@@ -314,7 +340,36 @@ export function useInboxActions() {
     onSettled: invalidate,
   })
 
-  return { setRead, archive, unarchive, markAllRead, archiveAllRead }
+  const archiveAll = useMutation({
+    mutationFn: () => inboxApi.archiveAll(),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.inbox(slug) })
+      const previous = queryClient.getQueryData<InboxItem[]>(queryKeys.inbox(slug))
+      patchInboxCache(queryClient, slug, () => [])
+      return { previous }
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(queryKeys.inbox(slug), context.previous)
+      Taro.showToast({ title: errorMessage(err), icon: 'none' })
+    },
+    onSettled: invalidate,
+  })
+
+  const archiveCompleted = useMutation({
+    mutationFn: () => inboxApi.archiveCompleted(),
+    onSuccess: () => invalidate(),
+    onError: (err) => Taro.showToast({ title: errorMessage(err), icon: 'none' }),
+  })
+
+  return {
+    setRead,
+    archive,
+    unarchive,
+    markAllRead,
+    archiveAllRead,
+    archiveAll,
+    archiveCompleted,
+  }
 }
 
 export function useCreateIssue() {

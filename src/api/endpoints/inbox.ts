@@ -45,3 +45,7 @@ export function archiveAll(): Promise<{ count: number }> {
 export function archiveAllRead(): Promise<{ count: number }> {
   return getApiClient().post<{ count: number }>('/api/inbox/archive-all-read')
 }
+
+export function archiveCompleted(): Promise<{ count: number }> {
+  return getApiClient().post<{ count: number }>('/api/inbox/archive-completed')
+}

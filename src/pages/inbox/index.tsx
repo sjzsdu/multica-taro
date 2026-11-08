@@ -82,7 +82,8 @@ export default function InboxPage() {
   const status = useAuthGuard()
   const workspace = useWorkspaceStore((state) => state.currentWorkspace)
   const { data: items, isLoading, isError, error, refetch } = useInbox()
-  const { setRead, archive, markAllRead, archiveAllRead } = useInboxActions()
+  const { setRead, archive, markAllRead, archiveAllRead, archiveAll, archiveCompleted } =
+    useInboxActions()
 
   const [filter, setFilter] = useState<Filter>('all')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -121,17 +122,41 @@ export default function InboxPage() {
     })
   }
 
-  const handleMenuSelect = (key: string) => {
+  const handleMenuSelect = async (key: string) => {
     setMenuOpen(false)
+
     if (key === 'mark-all-read') {
       markAllRead.mutate(undefined, {
-        onSuccess: () => Taro.showToast({ title: '已全部标为已读', icon: 'none' }),
+        onSuccess: (result) =>
+          Taro.showToast({ title: `已标记 ${result.count} 条为已读`, icon: 'none' }),
       })
       return
     }
     if (key === 'archive-read') {
       archiveAllRead.mutate(undefined, {
-        onSuccess: () => Taro.showToast({ title: '已归档已读通知', icon: 'none' }),
+        onSuccess: (result) =>
+          Taro.showToast({ title: `已归档 ${result.count} 条已读通知`, icon: 'none' }),
+      })
+      return
+    }
+    if (key === 'archive-completed') {
+      archiveCompleted.mutate(undefined, {
+        onSuccess: (result) =>
+          Taro.showToast({ title: `已归档 ${result.count} 条已完成通知`, icon: 'none' }),
+      })
+      return
+    }
+    if (key === 'archive-all') {
+      const result = await Taro.showModal({
+        title: '归档全部通知？',
+        content: '包括未读通知。任务本身不会被删除，仍可在任务页查看。',
+        confirmText: '归档',
+        confirmColor: '#D92D20',
+      })
+      if (!result.confirm) return
+      archiveAll.mutate(undefined, {
+        onSuccess: (res) =>
+          Taro.showToast({ title: `已归档 ${res.count} 条通知`, icon: 'none' }),
       })
       return
     }
@@ -145,8 +170,22 @@ export default function InboxPage() {
   }
 
   const menuOptions = [
-    { key: 'mark-all-read', label: '全部标为已读', description: `${unreadCount} 条未读` },
+    {
+      key: 'mark-all-read',
+      label: '全部标为已读',
+      description: unreadCount ? `${unreadCount} 条未读` : '没有未读通知',
+    },
     { key: 'archive-read', label: '归档已读通知' },
+    {
+      key: 'archive-completed',
+      label: '归档已完成的通知',
+      description: '任务已完成的收件箱项',
+    },
+    {
+      key: 'archive-all',
+      label: '归档全部通知',
+      description: '包括未读，任务不会被删除',
+    },
     { key: 'archived', label: '查看已归档' },
   ]
 
@@ -158,10 +197,8 @@ export default function InboxPage() {
         right={
           <>
             {unreadCount > 0 ? <Badge count={unreadCount} /> : null}
-            <View className='inbox__menu-button' onClick={() => setMenuOpen(true)}>
-              <View className='inbox__menu-dot' />
-              <View className='inbox__menu-dot' />
-              <View className='inbox__menu-dot' />
+            <View className='inbox__batch-button' onClick={() => setMenuOpen(true)}>
+              <Text className='inbox__batch-text'>批量</Text>
             </View>
           </>
         }

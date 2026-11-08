@@ -14,7 +14,7 @@ import {
   StatusBadge,
 } from '@/components/ui'
 import { useAuthGuard } from '@/hooks/use-auth-guard'
-import { useActors, useIssues, useMembers } from '@/hooks/use-api'
+import { useActors, useChildProgress, useIssueChildren, useIssues, useMembers } from '@/hooks/use-api'
 import { useAuthStore } from '@/stores/auth-store'
 import { errorMessage } from '@/api/client'
 import type { ListIssuesParams, Issue } from '@/api/types'
@@ -91,6 +91,122 @@ function IssueCard({
   )
 }
 
+function matchesFilters(
+  issue: Issue,
+  filters: Omit<ListIssuesParams, 'limit' | 'offset'>,
+): boolean {
+  if (filters.status && issue.status !== filters.status) return false
+  if (filters.statuses?.length && !filters.statuses.includes(issue.status)) return false
+  if (filters.priority && issue.priority !== filters.priority) return false
+  if (filters.assignee_id && issue.assignee_id !== filters.assignee_id) return false
+  if (filters.project_id && issue.project_id !== filters.project_id) return false
+  return true
+}
+
+function IssueTreeNode({
+  issue,
+  depth,
+  actors,
+  progressMap,
+  filters,
+  expanded,
+  onToggle,
+}: {
+  issue: Issue
+  depth: number
+  actors: ReturnType<typeof useActors>
+  progressMap: Map<string, { total: number; done: number }>
+  filters: Omit<ListIssuesParams, 'limit' | 'offset'>
+  expanded: Set<string>
+  onToggle: (id: string) => void
+}) {
+  const assignee = actors.find(issue.assignee_type, issue.assignee_id)
+  const progress = progressMap.get(issue.id)
+  const hasChildren = (progress?.total ?? 0) > 0
+  const isExpanded = expanded.has(issue.id)
+  const childrenQuery = useIssueChildren(issue.id, isExpanded)
+  const children = (childrenQuery.data ?? []).filter((child) =>
+    matchesFilters(child, filters),
+  )
+
+  return (
+    <View className='tree-node' style={depth > 0 ? { marginLeft: 14 } : undefined}>
+      <View
+        className='tree-node__row'
+        onClick={() =>
+          void Taro.navigateTo({ url: `/pages/issue-detail/index?id=${issue.id}` })
+        }
+      >
+        <View
+          className={`tree-node__chevron ${hasChildren ? 'is-branch' : ''} ${
+            isExpanded ? 'is-open' : ''
+          }`}
+          onClick={(event) => {
+            event.stopPropagation()
+            if (hasChildren) onToggle(issue.id)
+          }}
+        >
+          {hasChildren ? (
+            <Text className='tree-node__chevron-text'>›</Text>
+          ) : (
+            <View className='tree-node__leaf' />
+          )}
+        </View>
+
+        <View className='tree-node__body'>
+          <View className='tree-node__top'>
+            <Text className='tree-node__id'>{issue.identifier}</Text>
+            <StatusBadge status={issue.status} name={issue.status_name} compact />
+            {progress ? (
+              <Text className='tree-node__progress'>
+                {progress.done}/{progress.total}
+              </Text>
+            ) : null}
+            <PriorityMark priority={issue.priority} />
+          </View>
+          <Text className='tree-node__title'>{issue.title}</Text>
+          <View className='tree-node__meta'>
+            {assignee ? (
+              <>
+                <Avatar src={assignee.avatarUrl} name={assignee.name} size='xs' />
+                <Text className='tree-node__assignee'>{assignee.name}</Text>
+              </>
+            ) : (
+              <Text className='tree-node__unassigned'>未指派</Text>
+            )}
+            {issue.due_date ? (
+              <Text className='tree-node__due'>截止 {formatDate(issue.due_date)}</Text>
+            ) : null}
+          </View>
+        </View>
+      </View>
+
+      {isExpanded ? (
+        <View className='tree-node__children'>
+          {childrenQuery.isLoading ? (
+            <Text className='tree-node__hint'>加载子任务…</Text>
+          ) : children.length === 0 ? (
+            <Text className='tree-node__hint'>没有匹配的子任务</Text>
+          ) : (
+            children.map((child) => (
+              <IssueTreeNode
+                key={child.id}
+                issue={child}
+                depth={depth + 1}
+                actors={actors}
+                progressMap={progressMap}
+                filters={filters}
+                expanded={expanded}
+                onToggle={onToggle}
+              />
+            ))
+          )}
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
 function useDebounced<T>(value: T, delay = 320): T {
   const [debounced, setDebounced] = useState(value)
   useEffect(() => {
@@ -119,6 +235,9 @@ export default function IssuesPage() {
     return (members.data ?? []).find((member) => member.user_id === user.id)?.id
   }, [members.data, user])
 
+  const [viewMode, setViewMode] = useState<'list' | 'tree'>('list')
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
   const filters = useMemo<Omit<ListIssuesParams, 'limit' | 'offset'>>(() => {
     const next: Omit<ListIssuesParams, 'limit' | 'offset'> = {
       sort_by: 'last_activity',
@@ -134,11 +253,38 @@ export default function IssuesPage() {
     return next
   }, [debouncedSearch, view, statusFilter, currentMemberId])
 
-  const query = useIssues(filters)
+  const listQuery = useIssues(filters, viewMode === 'list')
+  const treeFilters = useMemo(() => ({ ...filters, top_level_only: true }), [filters])
+  const treeQuery = useIssues(treeFilters, viewMode === 'tree')
+  const query = viewMode === 'tree' ? treeQuery : listQuery
+
   const issues = useMemo(
-    () => (query.data?.pages ?? []).flatMap((page) => page.issues),
-    [query.data],
+    () => (listQuery.data?.pages ?? []).flatMap((page) => page.issues),
+    [listQuery.data],
   )
+  const rootIssues = useMemo(
+    () => (treeQuery.data?.pages ?? []).flatMap((page) => page.issues),
+    [treeQuery.data],
+  )
+  const progressQuery = useChildProgress()
+  const progressMap = useMemo(() => {
+    const map = new Map<string, { total: number; done: number }>()
+    for (const entry of progressQuery.data ?? []) {
+      map.set(entry.parent_issue_id, { total: entry.total, done: entry.done })
+    }
+    return map
+  }, [progressQuery.data])
+
+  const toggleExpanded = (id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const currentIssues = viewMode === 'tree' ? rootIssues : issues
 
   useDidShow(() => {
     if (status === 'authenticated') void query.refetch()
@@ -173,14 +319,30 @@ export default function IssuesPage() {
     <View className='screen issues'>
       <PageHeader
         title='任务'
-        subtitle={query.data ? `${query.data.pages[0]?.total ?? 0} 个任务` : undefined}
+        subtitle={
+          query.data
+            ? viewMode === 'tree'
+              ? `${query.data.pages[0]?.total ?? 0} 个根任务`
+              : `${query.data.pages[0]?.total ?? 0} 个任务`
+            : undefined
+        }
         right={
-          <View
-            className='issues__create'
-            onClick={() => void Taro.navigateTo({ url: '/pages/create/index' })}
-          >
-            <PlusIcon />
-            <Text className='issues__create-text'>新建</Text>
+          <View className='issues__actions'>
+            <View
+              className='issues__view-toggle'
+              onClick={() => setViewMode((mode) => (mode === 'list' ? 'tree' : 'list'))}
+            >
+              <Text className='issues__view-toggle-text'>
+                {viewMode === 'list' ? '树形' : '列表'}
+              </Text>
+            </View>
+            <View
+              className='issues__create'
+              onClick={() => void Taro.navigateTo({ url: '/pages/create/index' })}
+            >
+              <PlusIcon />
+              <Text className='issues__create-text'>新建</Text>
+            </View>
           </View>
         }
       >
@@ -242,7 +404,7 @@ export default function IssuesPage() {
           <InlineError message={errorMessage(query.error)} onRetry={() => void query.refetch()} />
         ) : null}
 
-        {!query.isLoading && !query.isError && issues.length === 0 ? (
+        {!query.isLoading && !query.isError && currentIssues.length === 0 ? (
           <EmptyState
             title={search ? '没有匹配的任务' : '还没有任务'}
             description={
@@ -253,24 +415,43 @@ export default function IssuesPage() {
           />
         ) : null}
 
-        <View className='issues__cards'>
-          {issues.map((issue) => (
-            <IssueCard
-              key={issue.id}
-              issue={issue}
-              findActor={actors.find}
-              onOpen={() =>
-                void Taro.navigateTo({ url: `/pages/issue-detail/index?id=${issue.id}` })
-              }
-            />
-          ))}
-        </View>
+        {viewMode === 'tree' ? (
+          <View className='issues__tree'>
+            {rootIssues.map((issue) => (
+              <IssueTreeNode
+                key={issue.id}
+                issue={issue}
+                depth={0}
+                actors={actors}
+                progressMap={progressMap}
+                filters={filters}
+                expanded={expanded}
+                onToggle={toggleExpanded}
+              />
+            ))}
+          </View>
+        ) : (
+          <View className='issues__cards'>
+            {issues.map((issue) => (
+              <IssueCard
+                key={issue.id}
+                issue={issue}
+                findActor={actors.find}
+                onOpen={() =>
+                  void Taro.navigateTo({ url: `/pages/issue-detail/index?id=${issue.id}` })
+                }
+              />
+            ))}
+          </View>
+        )}
 
         {query.isFetchingNextPage ? (
           <Text className='issues__more'>加载更多…</Text>
         ) : query.hasNextPage ? (
-          <Text className='issues__more'>上拉加载更多</Text>
-        ) : issues.length > 0 ? (
+          <Text className='issues__more'>
+            {viewMode === 'tree' ? '上拉加载更多根任务' : '上拉加载更多'}
+          </Text>
+        ) : currentIssues.length > 0 ? (
           <Text className='issues__more'>没有更多了</Text>
         ) : null}
 

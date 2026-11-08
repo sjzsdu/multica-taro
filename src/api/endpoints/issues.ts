@@ -124,6 +124,20 @@ export function deleteAttachment(id: string): Promise<void> {
   return getApiClient().delete<void>(`/api/attachments/${id}`)
 }
 
+export function listChildIssues(id: string): Promise<{ issues: Issue[] }> {
+  return getApiClient().get<{ issues: Issue[] }>(`/api/issues/${id}/children`)
+}
+
+export interface ChildIssueProgress {
+  parent_issue_id: string
+  total: number
+  done: number
+}
+
+export function getChildProgress(): Promise<{ progress: ChildIssueProgress[] }> {
+  return getApiClient().get<{ progress: ChildIssueProgress[] }>('/api/issues/child-progress')
+}
+
 /** Oldest first, comments and activity interleaved. */
 export function listTimeline(issueId: string): Promise<TimelineEntry[]> {
   return getApiClient().get<TimelineEntry[]>(`/api/issues/${issueId}/timeline`)

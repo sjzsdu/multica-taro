@@ -205,3 +205,156 @@
     opacity: 0.9;
   }
 }
+
+.issues {
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__view-toggle {
+    display: flex;
+    align-items: center;
+    height: 34px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+
+    &:active {
+      background: var(--surface-sunken);
+    }
+  }
+
+  &__view-toggle-text {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  &__tree {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 4px;
+  }
+}
+
+.tree-node {
+  &__row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+
+    &:active {
+      background: var(--surface-sunken);
+    }
+  }
+
+  &__chevron {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    margin-top: 2px;
+    flex-shrink: 0;
+  }
+
+  &__chevron-text {
+    font-size: 18px;
+    line-height: 1;
+    color: var(--text-tertiary);
+    transition: transform 0.15s ease;
+  }
+
+  &__chevron.is-open &__chevron-text {
+    transform: rotate(90deg);
+  }
+
+  &__leaf {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--border-strong);
+  }
+
+  &__body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__top {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+
+  &__id {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+  }
+
+  &__progress {
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+
+  &__title {
+    display: block;
+    margin-top: 4px;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--text);
+  }
+
+  &__meta {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 5px;
+  }
+
+  &__assignee {
+    max-width: 110px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  &__unassigned {
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+
+  &__due {
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+
+  &__children {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 6px;
+    padding-left: 8px;
+    border-left: 1px solid var(--border);
+  }
+
+  &__hint {
+    display: block;
+    padding: 6px 0 2px 12px;
+    font-size: 12px;
+    color: var(--text-tertiary);
+  }
+}

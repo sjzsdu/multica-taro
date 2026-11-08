@@ -16,6 +16,7 @@ import {
   useActors,
   useCreateComment,
   useIssue,
+  useIssueChildren,
   useIssueTimeline,
   useProjects,
   useUpdateIssue,
@@ -32,7 +33,8 @@ import {
   PRIORITY_ORDER,
   STATUS_ORDER,
 } from '@/utils/format'
-import { parseMarkdown, type MarkdownBlock } from '@/utils/markdown'
+import { parseMarkdown } from '@/utils/markdown'
+import { MarkdownBody, commentPreview } from '@/components/markdown'
 import './index.scss'
 
 type SheetKind = 'status' | 'priority' | 'assignee' | 'project' | null
@@ -51,6 +53,9 @@ export default function IssueDetailPage() {
 
   const issueQuery = useIssue(issueId)
   const timelineQuery = useIssueTimeline(issueId)
+  const childrenQuery = useIssueChildren(issueId)
+  const parentId = issueQuery.data?.parent_issue_id ?? ''
+  const parentQuery = useIssue(parentId)
   const updateIssue = useUpdateIssue()
   const createComment = useCreateComment(issueId)
   const projects = useProjects()
@@ -58,6 +63,23 @@ export default function IssueDetailPage() {
 
   const issue = issueQuery.data
   const timeline = timelineQuery.data ?? []
+  const childIssues = childrenQuery.data ?? []
+  const doneChildren = childIssues.filter(
+    (child) => child.status === 'done' || child.status_category === 'done',
+  ).length
+  const parentIssue = parentQuery.data
+  const commentAnchors = useMemo(
+    () =>
+      timeline
+        .filter(
+          (entry) => entry.type === 'comment' && entry.actor_type === 'member',
+        )
+        .map((entry) => ({
+          id: `comment-${entry.id}`,
+          label: `${entry.actor_name || '成员'}：${commentPreview(entry.content)}`,
+        })),
+    [timeline],
+  )
   const description = issue?.description ?? ''
   const { blocks: descriptionBlocks, headings } = useMemo(
     () => parseMarkdown(description),
@@ -73,6 +95,7 @@ export default function IssueDetailPage() {
   const [descriptionDraft, setDescriptionDraft] = useState('')
   const [commentDraft, setCommentDraft] = useState('')
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
+  const [composerFocused, setComposerFocused] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const viewportHeight = useKeyboardViewport()
 
@@ -308,7 +331,7 @@ export default function IssueDetailPage() {
         title={issue.identifier}
         subtitle={issue.title.length > 22 ? `${issue.title.slice(0, 22)}…` : issue.title}
         right={
-          headings.length > 0 ? (
+          headings.length > 0 || commentAnchors.length > 0 ? (
             <View className='detail__toc-btn' onClick={() => setTocOpen(true)}>
               <Text className='detail__toc-btn-text'>目录</Text>
             </View>
@@ -385,6 +408,18 @@ export default function IssueDetailPage() {
               {project?.title || '无项目'}
             </Text>
           </KeyValueRow>
+          {parentIssue ? (
+            <KeyValueRow
+              label='父任务'
+              onClick={() =>
+                void Taro.navigateTo({
+                  url: `/pages/issue-detail/index?id=${parentIssue.id}`,
+                })
+              }
+            >
+              <Text className='detail__value'>{parentIssue.identifier}</Text>
+            </KeyValueRow>
+          ) : null}
           <KeyValueRow label='截止日期'>
             <Picker
               mode='date'
@@ -445,6 +480,34 @@ export default function IssueDetailPage() {
           )}
         </View>
 
+        {childIssues.length > 0 ? (
+          <View className='detail__card detail__card--block'>
+            <View className='detail__section-head'>
+              <Text className='detail__section-title'>子任务</Text>
+              <Text className='detail__section-count'>
+                {doneChildren}/{childIssues.length}
+              </Text>
+            </View>
+            <View className='detail__children'>
+              {childIssues.map((child) => (
+                <View
+                  key={child.id}
+                  className='detail__child'
+                  onClick={() =>
+                    void Taro.navigateTo({
+                      url: `/pages/issue-detail/index?id=${child.id}`,
+                    })
+                  }
+                >
+                  <StatusBadge status={child.status} name={child.status_name} compact />
+                  <Text className='detail__child-id'>{child.identifier}</Text>
+                  <Text className='detail__child-title'>{child.title}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
         <View id='comments' className='detail__card detail__card--block'>
           <View className='detail__section-head'>
             <Text className='detail__section-title'>动态与评论</Text>
@@ -467,49 +530,61 @@ export default function IssueDetailPage() {
         <View className='detail__scroll-space' />
       </ScrollView>
 
-      {pendingImages.length > 0 ? (
-        <ScrollView scrollX className='detail__attachments'>
-          {pendingImages.map((item) => (
-            <View key={item.key} className='detail__attachment'>
-              <Image className='detail__attachment-img' src={item.path} mode='aspectFill' />
-              {item.uploading ? (
-                <View className='detail__attachment-mask'>
-                  <Text className='detail__attachment-mask-text'>上传中</Text>
+      <View className='detail__composer-area'>
+        {pendingImages.length > 0 ? (
+          <ScrollView scrollX className='detail__attachments'>
+            {pendingImages.map((item) => (
+              <View key={item.key} className='detail__attachment'>
+                <Image className='detail__attachment-img' src={item.path} mode='aspectFill' />
+                {item.uploading ? (
+                  <View className='detail__attachment-mask'>
+                    <Text className='detail__attachment-mask-text'>上传中</Text>
+                  </View>
+                ) : null}
+                <View
+                  className='detail__attachment-remove'
+                  onClick={() => handleRemoveImage(item)}
+                >
+                  <Text className='detail__attachment-remove-text'>×</Text>
                 </View>
-              ) : null}
-              <View
-                className='detail__attachment-remove'
-                onClick={() => handleRemoveImage(item)}
-              >
-                <Text className='detail__attachment-remove-text'>×</Text>
               </View>
-            </View>
-          ))}
-        </ScrollView>
-      ) : null}
+            ))}
+          </ScrollView>
+        ) : null}
 
-      <View className='detail__composer'>
-        <View className='detail__attach' onClick={() => void handleChooseImage()}>
-          <Text className='detail__attach-icon'>+</Text>
-        </View>
-        <Textarea
-          className='detail__composer-input'
-          value={commentDraft}
-          placeholder='写评论…'
-          placeholderClass='input-placeholder'
-          autoHeight
-          maxlength={4000}
-          adjustPosition
-          cursorSpacing={24}
-          onInput={(event) => setCommentDraft(event.detail.value)}
-        />
-        <View
-          className={`detail__send ${commentDraft.trim() ? 'is-active' : ''} ${
-            createComment.isPending ? 'is-pending' : ''
-          }`}
-          onClick={handleSendComment}
-        >
-          <Text className='detail__send-text'>{createComment.isPending ? '…' : '发送'}</Text>
+        <View className='detail__composer'>
+          <View className='detail__attach' onClick={() => void handleChooseImage()}>
+            <View className='detail__attach-icon'>
+              <View className='detail__attach-peak' />
+            </View>
+          </View>
+          <View
+            className={`detail__input-wrap ${composerFocused ? 'is-focused' : ''}`}
+          >
+            <Textarea
+              className='detail__composer-input'
+              value={commentDraft}
+              placeholder='写评论…'
+              placeholderClass='input-placeholder'
+              autoHeight
+              maxlength={4000}
+              adjustPosition
+              cursorSpacing={24}
+              onFocus={() => setComposerFocused(true)}
+              onBlur={() => setComposerFocused(false)}
+              onInput={(event) => setCommentDraft(event.detail.value)}
+            />
+          </View>
+          <View
+            className={`detail__send ${
+              commentDraft.trim() && !createComment.isPending ? 'is-active' : ''
+            } ${createComment.isPending ? 'is-pending' : ''}`}
+            onClick={handleSendComment}
+          >
+            <Text className='detail__send-text'>
+              {createComment.isPending ? '…' : '发送'}
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -545,13 +620,17 @@ export default function IssueDetailPage() {
       <OptionSheet
         visible={tocOpen}
         title='快速定位'
-        subtitle='跳到描述中的标题或评论区'
+        subtitle='跳到描述标题或成员评论'
         options={[
           ...headings.map((heading) => ({
             key: heading.id,
             label: `${'　'.repeat(Math.max(0, heading.level - 1))}${heading.label}`,
           })),
-          { key: 'comments', label: '评论与动态' },
+          { key: 'comments', label: '评论区' },
+          ...commentAnchors.map((anchor) => ({
+            key: anchor.id,
+            label: anchor.label,
+          })),
         ]}
         onSelect={(key) => {
           setTocOpen(false)
@@ -564,52 +643,11 @@ export default function IssueDetailPage() {
   )
 }
 
-function MarkdownBody({ blocks }: { blocks: MarkdownBlock[] }) {
-  return (
-    <View className='detail__markdown'>
-      {blocks.map((block, index) => {
-        switch (block.type) {
-          case 'heading':
-            return (
-              <View key={index} id={block.id} className='detail__md-heading'>
-                <Text className={`detail__md-h detail__md-h${block.level || 3}`}>
-                  {block.text}
-                </Text>
-              </View>
-            )
-          case 'code':
-            return (
-              <View key={index} className='detail__md-code'>
-                <Text className='detail__md-code-text'>{block.text}</Text>
-              </View>
-            )
-          case 'list':
-            return (
-              <Text key={index} className='detail__md-li'>
-                • {block.text}
-              </Text>
-            )
-          case 'quote':
-            return (
-              <Text key={index} className='detail__md-quote'>
-                {block.text}
-              </Text>
-            )
-          case 'space':
-            return <View key={index} className='detail__md-space' />
-          default:
-            return (
-              <Text key={index} className='detail__md-p'>
-                {block.text}
-              </Text>
-            )
-        }
-      })}
-    </View>
-  )
-}
 
 function TimelineRow({ entry }: { entry: TimelineEntry }) {
+  const content = entry.content?.trim() || (entry.deleted_at ? '该评论已删除' : '')
+  const commentBlocks = useMemo(() => parseMarkdown(content).blocks, [content])
+
   if (!isCommentEntry(entry)) {
     return (
       <View className='timeline__activity'>
@@ -623,7 +661,6 @@ function TimelineRow({ entry }: { entry: TimelineEntry }) {
     )
   }
 
-  const content = entry.content?.trim() || (entry.deleted_at ? '该评论已删除' : '')
   const attachments: Attachment[] = entry.attachments ?? []
   const imageUrls = attachments
     .filter((attachment) => attachment.content_type?.startsWith('image/'))
@@ -631,14 +668,16 @@ function TimelineRow({ entry }: { entry: TimelineEntry }) {
     .filter((url): url is string => Boolean(url))
 
   return (
-    <View className='timeline__comment'>
+    <View id={`comment-${entry.id}`} className='timeline__comment'>
       <Avatar src={entry.actor_avatar_url} name={entry.actor_name || '成员'} size='sm' />
       <View className='timeline__comment-body'>
         <View className='timeline__comment-head'>
           <Text className='timeline__comment-author'>{entry.actor_name || '成员'}</Text>
           <Text className='timeline__time'>{formatRelativeTime(entry.created_at)}</Text>
         </View>
-        <Text className='timeline__comment-content'>{content}</Text>
+        <View className='timeline__comment-content'>
+          <MarkdownBody blocks={commentBlocks} withAnchors={false} compact />
+        </View>
         {attachments.length > 0 ? (
           <View className='timeline__attachments'>
             {attachments.map((attachment) => {

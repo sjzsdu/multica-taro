@@ -1,21 +1,22 @@
 .inbox {
-  &__menu-button {
+  &__batch-button {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 3px;
-    width: 34px;
     height: 34px;
-    border-radius: 50%;
+    padding: 0 14px;
+    border-radius: 999px;
     background: var(--surface);
     border: 1px solid var(--border);
+
+    &:active {
+      background: var(--surface-sunken);
+    }
   }
 
-  &__menu-dot {
-    width: 3px;
-    height: 3px;
-    border-radius: 50%;
-    background: var(--text-secondary);
+  &__batch-text {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
   }
 
   &__filters {
