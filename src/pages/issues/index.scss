@@ -95,7 +95,7 @@
   }
 
   &__bottom-space {
-    height: calc(24px + env(safe-area-inset-bottom));
+    height: calc(74px + env(safe-area-inset-bottom));
   }
 }
 
@@ -145,7 +145,7 @@
     -webkit-line-clamp: 2;
     overflow: hidden;
     margin-top: 7px;
-    font-size: 15px;
+    font-size: calc(15px * var(--font-scale));
     font-weight: 600;
     line-height: 1.45;
     color: var(--text);

@@ -361,7 +361,8 @@ export function useCreateComment(issueId: string) {
   const queryClient = useQueryClient()
   const slug = useSlug()
   return useMutation({
-    mutationFn: (content: string) => issuesApi.createComment(issueId, content),
+    mutationFn: ({ content, attachmentIds }: { content: string; attachmentIds?: string[] }) =>
+      issuesApi.createComment(issueId, content, attachmentIds),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.timeline(slug, issueId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.issue(slug, issueId) })

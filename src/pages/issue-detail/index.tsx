@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { View, Text, ScrollView, Textarea, Input, Picker } from '@tarojs/components'
+import { View, Text, ScrollView, Textarea, Input, Picker, Image } from '@tarojs/components'
 import Taro, { useRouter } from '@tarojs/taro'
 import {
   Avatar,
@@ -21,7 +21,8 @@ import {
   useUpdateIssue,
 } from '@/hooks/use-api'
 import { errorMessage } from '@/api/client'
-import type { IssuePriority, TimelineEntry } from '@/api/types'
+import * as issuesApi from '@/api/endpoints/issues'
+import type { Attachment, IssuePriority, TimelineEntry } from '@/api/types'
 import {
   activityLabel,
   formatDate,
@@ -31,9 +32,17 @@ import {
   PRIORITY_ORDER,
   STATUS_ORDER,
 } from '@/utils/format'
+import { parseMarkdown, type MarkdownBlock } from '@/utils/markdown'
 import './index.scss'
 
 type SheetKind = 'status' | 'priority' | 'assignee' | 'project' | null
+
+interface PendingImage {
+  key: string
+  path: string
+  id?: string
+  uploading: boolean
+}
 
 export default function IssueDetailPage() {
   const status = useAuthGuard()
@@ -49,14 +58,23 @@ export default function IssueDetailPage() {
 
   const issue = issueQuery.data
   const timeline = timelineQuery.data ?? []
+  const description = issue?.description ?? ''
+  const { blocks: descriptionBlocks, headings } = useMemo(
+    () => parseMarkdown(description),
+    [description],
+  )
 
   const [sheet, setSheet] = useState<SheetKind>(null)
+  const [tocOpen, setTocOpen] = useState(false)
+  const [scrollTarget, setScrollTarget] = useState('')
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const [editingDescription, setEditingDescription] = useState(false)
   const [descriptionDraft, setDescriptionDraft] = useState('')
   const [commentDraft, setCommentDraft] = useState('')
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
   const [refreshing, setRefreshing] = useState(false)
+  const viewportHeight = useKeyboardViewport()
 
   const assignee = useMemo(
     () => (issue ? actors.find(issue.assignee_type, issue.assignee_id) : undefined),
@@ -121,13 +139,79 @@ export default function IssueDetailPage() {
     )
   }
 
+  const handleChooseImage = async () => {
+    if (pendingImages.length >= 6) {
+      Taro.showToast({ title: '最多添加 6 张图片', icon: 'none' })
+      return
+    }
+
+    let paths: string[] = []
+    try {
+      const result = await Taro.chooseImage({
+        count: 6 - pendingImages.length,
+        sizeType: ['compressed'],
+      })
+      paths = result.tempFilePaths ?? []
+    } catch {
+      // User cancelled the picker.
+      return
+    }
+
+    const items: PendingImage[] = paths.map((path, index) => ({
+      key: `${Date.now()}-${index}-${path}`,
+      path,
+      uploading: true,
+    }))
+    setPendingImages((prev) => [...prev, ...items])
+
+    await Promise.all(
+      items.map(async (item) => {
+        try {
+          const attachment = await issuesApi.uploadFile(item.path)
+          setPendingImages((prev) =>
+            prev.map((entry) =>
+              entry.key === item.key ? { ...entry, id: attachment.id, uploading: false } : entry,
+            ),
+          )
+        } catch (err) {
+          setPendingImages((prev) => prev.filter((entry) => entry.key !== item.key))
+          notifyError(err)
+        }
+      }),
+    )
+  }
+
+  const handleRemoveImage = (item: PendingImage) => {
+    setPendingImages((prev) => prev.filter((entry) => entry.key !== item.key))
+    if (item.id) {
+      void issuesApi.deleteAttachment(item.id).catch(() => {
+        // Orphan cleanup is best effort; the comment is what matters.
+      })
+    }
+  }
+
   const handleSendComment = () => {
     const content = commentDraft.trim()
     if (!content || createComment.isPending) return
-    createComment.mutate(content, {
-      onError: notifyError,
-      onSuccess: () => setCommentDraft(''),
-    })
+    if (pendingImages.some((item) => item.uploading)) {
+      Taro.showToast({ title: '图片还在上传中', icon: 'none' })
+      return
+    }
+
+    const attachmentIds = pendingImages
+      .map((item) => item.id)
+      .filter((id): id is string => Boolean(id))
+
+    createComment.mutate(
+      { content, attachmentIds },
+      {
+        onError: notifyError,
+        onSuccess: () => {
+          setCommentDraft('')
+          setPendingImages([])
+        },
+      },
+    )
   }
 
   if (status === 'loading') return <Spinner label='正在恢复会话…' />
@@ -216,14 +300,25 @@ export default function IssueDetailPage() {
   }
 
   return (
-    <View className='detail'>
+    <View
+      className='detail'
+      style={viewportHeight ? { height: `${viewportHeight}px` } : undefined}
+    >
       <SubPageHeader
         title={issue.identifier}
         subtitle={issue.title.length > 22 ? `${issue.title.slice(0, 22)}…` : issue.title}
+        right={
+          headings.length > 0 ? (
+            <View className='detail__toc-btn' onClick={() => setTocOpen(true)}>
+              <Text className='detail__toc-btn-text'>目录</Text>
+            </View>
+          ) : undefined
+        }
       />
       <ScrollView
         className='detail__scroll'
         scrollY
+        scrollIntoView={scrollTarget || undefined}
         refresherEnabled
         refresherTriggered={refreshing}
         onRefresherRefresh={handleRefresh}
@@ -343,14 +438,14 @@ export default function IssueDetailPage() {
                 </Text>
               </View>
             </View>
+          ) : description ? (
+            <MarkdownBody blocks={descriptionBlocks} />
           ) : (
-            <Text className={`detail__description ${issue.description ? '' : 'is-empty'}`}>
-              {issue.description || '暂无描述'}
-            </Text>
+            <Text className='detail__description is-empty'>暂无描述</Text>
           )}
         </View>
 
-        <View className='detail__card detail__card--block'>
+        <View id='comments' className='detail__card detail__card--block'>
           <View className='detail__section-head'>
             <Text className='detail__section-title'>动态与评论</Text>
             <Text className='detail__section-count'>{timeline.length}</Text>
@@ -372,7 +467,31 @@ export default function IssueDetailPage() {
         <View className='detail__scroll-space' />
       </ScrollView>
 
+      {pendingImages.length > 0 ? (
+        <ScrollView scrollX className='detail__attachments'>
+          {pendingImages.map((item) => (
+            <View key={item.key} className='detail__attachment'>
+              <Image className='detail__attachment-img' src={item.path} mode='aspectFill' />
+              {item.uploading ? (
+                <View className='detail__attachment-mask'>
+                  <Text className='detail__attachment-mask-text'>上传中</Text>
+                </View>
+              ) : null}
+              <View
+                className='detail__attachment-remove'
+                onClick={() => handleRemoveImage(item)}
+              >
+                <Text className='detail__attachment-remove-text'>×</Text>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+      ) : null}
+
       <View className='detail__composer'>
+        <View className='detail__attach' onClick={() => void handleChooseImage()}>
+          <Text className='detail__attach-icon'>+</Text>
+        </View>
         <Textarea
           className='detail__composer-input'
           value={commentDraft}
@@ -380,6 +499,8 @@ export default function IssueDetailPage() {
           placeholderClass='input-placeholder'
           autoHeight
           maxlength={4000}
+          adjustPosition
+          cursorSpacing={24}
           onInput={(event) => setCommentDraft(event.detail.value)}
         />
         <View
@@ -421,6 +542,69 @@ export default function IssueDetailPage() {
         onSelect={handleSheetSelect}
         onClose={() => setSheet(null)}
       />
+      <OptionSheet
+        visible={tocOpen}
+        title='快速定位'
+        subtitle='跳到描述中的标题或评论区'
+        options={[
+          ...headings.map((heading) => ({
+            key: heading.id,
+            label: `${'　'.repeat(Math.max(0, heading.level - 1))}${heading.label}`,
+          })),
+          { key: 'comments', label: '评论与动态' },
+        ]}
+        onSelect={(key) => {
+          setTocOpen(false)
+          setScrollTarget(key)
+          setTimeout(() => setScrollTarget(''), 400)
+        }}
+        onClose={() => setTocOpen(false)}
+      />
+    </View>
+  )
+}
+
+function MarkdownBody({ blocks }: { blocks: MarkdownBlock[] }) {
+  return (
+    <View className='detail__markdown'>
+      {blocks.map((block, index) => {
+        switch (block.type) {
+          case 'heading':
+            return (
+              <View key={index} id={block.id} className='detail__md-heading'>
+                <Text className={`detail__md-h detail__md-h${block.level || 3}`}>
+                  {block.text}
+                </Text>
+              </View>
+            )
+          case 'code':
+            return (
+              <View key={index} className='detail__md-code'>
+                <Text className='detail__md-code-text'>{block.text}</Text>
+              </View>
+            )
+          case 'list':
+            return (
+              <Text key={index} className='detail__md-li'>
+                • {block.text}
+              </Text>
+            )
+          case 'quote':
+            return (
+              <Text key={index} className='detail__md-quote'>
+                {block.text}
+              </Text>
+            )
+          case 'space':
+            return <View key={index} className='detail__md-space' />
+          default:
+            return (
+              <Text key={index} className='detail__md-p'>
+                {block.text}
+              </Text>
+            )
+        }
+      })}
     </View>
   )
 }
@@ -440,6 +624,11 @@ function TimelineRow({ entry }: { entry: TimelineEntry }) {
   }
 
   const content = entry.content?.trim() || (entry.deleted_at ? '该评论已删除' : '')
+  const attachments: Attachment[] = entry.attachments ?? []
+  const imageUrls = attachments
+    .filter((attachment) => attachment.content_type?.startsWith('image/'))
+    .map((attachment) => attachment.markdown_url || attachment.url || attachment.download_url)
+    .filter((url): url is string => Boolean(url))
 
   return (
     <View className='timeline__comment'>
@@ -450,7 +639,67 @@ function TimelineRow({ entry }: { entry: TimelineEntry }) {
           <Text className='timeline__time'>{formatRelativeTime(entry.created_at)}</Text>
         </View>
         <Text className='timeline__comment-content'>{content}</Text>
+        {attachments.length > 0 ? (
+          <View className='timeline__attachments'>
+            {attachments.map((attachment) => {
+              const src =
+                attachment.markdown_url || attachment.url || attachment.download_url || ''
+              const isImage = Boolean(
+                attachment.content_type?.startsWith('image/') && src,
+              )
+              if (isImage) {
+                return (
+                  <Image
+                    key={attachment.id}
+                    className='timeline__attachment-image'
+                    src={src}
+                    mode='widthFix'
+                    onClick={() =>
+                      void Taro.previewImage({ urls: imageUrls, current: src })
+                    }
+                  />
+                )
+              }
+              return (
+                <Text key={attachment.id} className='timeline__attachment-file'>
+                  📎 {attachment.filename || '附件'}
+                </Text>
+              )
+            })}
+          </View>
+        ) : null}
       </View>
     </View>
   )
+}
+
+/**
+ * Keeps the detail view inside the visual viewport while the H5 keyboard is
+ * open. Without this the composer sits behind the keyboard on mobile Safari /
+ * Chrome and typing looks broken.
+ */
+function useKeyboardViewport(): number | null {
+  const [height, setHeight] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (process.env.TARO_ENV !== 'h5') return
+    if (typeof window === 'undefined' || !window.visualViewport) return
+
+    const viewport = window.visualViewport
+    const update = () => {
+      // Only shrink for the keyboard, not for browser chrome / URL bar.
+      const keyboardOpen = window.innerHeight - viewport.height > 120
+      setHeight(keyboardOpen ? viewport.height : null)
+    }
+
+    viewport.addEventListener('resize', update)
+    viewport.addEventListener('scroll', update)
+    update()
+    return () => {
+      viewport.removeEventListener('resize', update)
+      viewport.removeEventListener('scroll', update)
+    }
+  }, [])
+
+  return height
 }

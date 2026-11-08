@@ -439,7 +439,7 @@
   &:last-child { border-bottom: none; }
 
   &__label {
-    font-size: 14px;
+    font-size: calc(14px * var(--font-scale));
     color: var(--text-secondary);
   }
 
@@ -447,7 +447,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 14px;
+    font-size: calc(14px * var(--font-scale));
     color: var(--text);
   }
 }
@@ -471,7 +471,7 @@
 
   &__title {
     display: block;
-    font-size: 26px;
+    font-size: calc(26px * var(--font-scale));
     font-weight: 800;
     letter-spacing: -0.6px;
     color: var(--text);
@@ -505,7 +505,7 @@
   transition: opacity 0.16s ease;
 
   &__label {
-    font-size: 15px;
+    font-size: calc(15px * var(--font-scale));
     font-weight: 600;
     color: #fff;
   }
@@ -571,7 +571,7 @@
 
   &__title {
     display: block;
-    font-size: 16px;
+    font-size: calc(16px * var(--font-scale));
     font-weight: 700;
     color: var(--text);
     overflow: hidden;

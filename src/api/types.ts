@@ -154,6 +154,8 @@ export interface Attachment {
   size_bytes?: number
   url?: string
   download_url?: string
+  /** Durable URL safe to embed in content / render as an image. */
+  markdown_url?: string
 }
 
 /** One row of `GET /api/issues/:id/timeline` (oldest first). */

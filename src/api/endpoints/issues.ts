@@ -1,4 +1,5 @@
-import { getApiClient } from '../index'
+import Taro from '@tarojs/taro'
+import { getApiBaseUrl, getApiClient } from '../index'
 import type {
   Agent,
   Issue,
@@ -72,11 +73,55 @@ export function listComments(issueId: string) {
   >
 }
 
-export function createComment(issueId: string, content: string): Promise<import('../types').Comment> {
+export function createComment(
+  issueId: string,
+  content: string,
+  attachmentIds?: string[],
+): Promise<import('../types').Comment> {
   return getApiClient().post(`/api/issues/${issueId}/comments`, {
     content,
     type: 'comment',
+    ...(attachmentIds && attachmentIds.length > 0 ? { attachment_ids: attachmentIds } : {}),
   })
+}
+
+/**
+ * Uploads a local file (from Taro.chooseImage) to the Multica backend.
+ *
+ * Taro.uploadFile is used instead of fetch so the same code path works in H5
+ * and mini programs; the auth headers mirror ApiClient's.
+ */
+export async function uploadFile(filePath: string): Promise<import('../types').Attachment> {
+  const base = getApiBaseUrl()
+  const token = (Taro.getStorageSync('auth_token') as string) || ''
+  const workspaceSlug = (Taro.getStorageSync('workspace_slug') as string) || ''
+
+  const result = await Taro.uploadFile({
+    url: `${base}/api/upload-file`,
+    filePath,
+    name: 'file',
+    header: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(workspaceSlug ? { 'X-Workspace-Slug': workspaceSlug } : {}),
+    },
+  })
+
+  if (result.statusCode < 200 || result.statusCode >= 300) {
+    let message = `上传失败（${result.statusCode}）`
+    try {
+      const body = JSON.parse(result.data) as { error?: string }
+      if (body?.error) message = body.error
+    } catch {
+      // Non-JSON error body; keep the status-based message.
+    }
+    throw new Error(message)
+  }
+
+  return JSON.parse(result.data) as import('../types').Attachment
+}
+
+export function deleteAttachment(id: string): Promise<void> {
+  return getApiClient().delete<void>(`/api/attachments/${id}`)
 }
 
 /** Oldest first, comments and activity interleaved. */

@@ -2,6 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   width: 100%;
   max-width: 720px;
   margin: 0 auto;
@@ -60,7 +61,7 @@
   }
 
   &__title-input {
-    font-size: 16px;
+    font-size: calc(16px * var(--font-scale));
     font-weight: 600;
   }
 
@@ -113,7 +114,7 @@
   }
 
   &__value {
-    font-size: 14px;
+    font-size: calc(14px * var(--font-scale));
     color: var(--text);
     max-width: 200px;
     overflow: hidden;

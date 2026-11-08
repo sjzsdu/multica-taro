@@ -17,6 +17,11 @@ function resolveBaseUrl(): string {
   return process.env.TARO_ENV === 'h5' ? '' : DEFAULT_ORIGIN
 }
 
+/** Exposed for Taro.uploadFile, which takes a URL instead of using the client. */
+export function getApiBaseUrl(): string {
+  return resolveBaseUrl()
+}
+
 let client: ApiClient | null = null
 let unauthorizedHandler: (() => void) | null = null
 

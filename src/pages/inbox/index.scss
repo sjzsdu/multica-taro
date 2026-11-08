@@ -36,7 +36,7 @@
   }
 
   &__bottom-space {
-    height: calc(24px + env(safe-area-inset-bottom));
+    height: calc(74px + env(safe-area-inset-bottom));
   }
 }
 
@@ -93,7 +93,7 @@
   &__title {
     display: block;
     margin-top: 6px;
-    font-size: 15px;
+    font-size: calc(15px * var(--font-scale));
     line-height: 1.45;
     color: var(--text);
     font-weight: 400;
@@ -109,7 +109,7 @@
     -webkit-line-clamp: 2;
     overflow: hidden;
     margin-top: 5px;
-    font-size: 13px;
+    font-size: calc(13px * var(--font-scale));
     line-height: 1.55;
     color: var(--text-secondary);
   }
