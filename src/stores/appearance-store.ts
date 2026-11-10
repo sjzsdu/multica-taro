@@ -4,11 +4,13 @@ import Taro from '@tarojs/taro'
 export type FontScale = 'normal' | 'large' | 'xlarge'
 export type Density = 'compact' | 'cozy' | 'comfortable'
 export type TaskView = 'list' | 'tree'
+export type Theme = 'light' | 'dark' | 'system'
 
 const FONT_SCALE_KEY = 'appearance_font_scale'
 const DENSITY_KEY = 'appearance_density'
 const TASK_VIEW_KEY = 'appearance_task_view'
 const AUTO_REFRESH_KEY = 'appearance_auto_refresh'
+const THEME_KEY = 'appearance_theme'
 
 /**
  * The previous "特大" is now the standard size; the other two steps keep
@@ -38,6 +40,10 @@ function isTaskView(value: unknown): value is TaskView {
   return value === 'list' || value === 'tree'
 }
 
+function isTheme(value: unknown): value is Theme {
+  return value === 'light' || value === 'dark' || value === 'system'
+}
+
 function isH5(): boolean {
   return process.env.TARO_ENV === 'h5'
 }
@@ -55,16 +61,43 @@ export function applyDensity(density: Density): void {
   if (className) root.classList.add(className)
 }
 
+function systemPrefersDark(): boolean {
+  if (typeof window === 'undefined' || !window.matchMedia) return false
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
+export function applyTheme(theme: Theme): void {
+  if (!isH5() || typeof document === 'undefined') return
+  const dark = theme === 'dark' || (theme === 'system' && systemPrefersDark())
+  document.documentElement.classList.toggle('theme-dark', dark)
+  document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+}
+
+let systemThemeQuery: MediaQueryList | null = null
+
+function watchSystemTheme(): void {
+  if (!isH5() || typeof window === 'undefined' || !window.matchMedia) return
+  if (systemThemeQuery) return
+  systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)')
+  systemThemeQuery.addEventListener('change', () => {
+    if (useAppearanceStore.getState().theme === 'system') {
+      applyTheme('system')
+    }
+  })
+}
+
 interface AppearanceState {
   fontScale: FontScale
   density: Density
   taskView: TaskView
   autoRefresh: boolean
+  theme: Theme
   init: () => void
   setFontScale: (scale: FontScale) => void
   setDensity: (density: Density) => void
   setTaskView: (view: TaskView) => void
   setAutoRefresh: (enabled: boolean) => void
+  setTheme: (theme: Theme) => void
 }
 
 export const useAppearanceStore = create<AppearanceState>((set) => ({
@@ -72,21 +105,26 @@ export const useAppearanceStore = create<AppearanceState>((set) => ({
   density: 'cozy',
   taskView: 'list',
   autoRefresh: true,
+  theme: 'light',
 
   init: () => {
     const storedFontScale = Taro.getStorageSync(FONT_SCALE_KEY)
     const storedDensity = Taro.getStorageSync(DENSITY_KEY)
     const storedTaskView = Taro.getStorageSync(TASK_VIEW_KEY)
     const storedAutoRefresh = Taro.getStorageSync(AUTO_REFRESH_KEY)
+    const storedTheme = Taro.getStorageSync(THEME_KEY)
 
     const fontScale = isFontScale(storedFontScale) ? storedFontScale : 'normal'
     const density = isDensity(storedDensity) ? storedDensity : 'cozy'
     const taskView = isTaskView(storedTaskView) ? storedTaskView : 'list'
     const autoRefresh = typeof storedAutoRefresh === 'boolean' ? storedAutoRefresh : true
+    const theme = isTheme(storedTheme) ? storedTheme : 'light'
 
     applyFontScale(fontScale)
     applyDensity(density)
-    set({ fontScale, density, taskView, autoRefresh })
+    applyTheme(theme)
+    watchSystemTheme()
+    set({ fontScale, density, taskView, autoRefresh, theme })
   },
 
   setFontScale: (scale: FontScale) => {
@@ -109,5 +147,11 @@ export const useAppearanceStore = create<AppearanceState>((set) => ({
   setAutoRefresh: (enabled: boolean) => {
     Taro.setStorageSync(AUTO_REFRESH_KEY, enabled)
     set({ autoRefresh: enabled })
+  },
+
+  setTheme: (theme: Theme) => {
+    Taro.setStorageSync(THEME_KEY, theme)
+    applyTheme(theme)
+    set({ theme })
   },
 }))

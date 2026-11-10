@@ -8,7 +8,7 @@
   flex-shrink: 0;
   border-radius: 50%;
   overflow: hidden;
-  background: #e4e7ec;
+  background: var(--surface-sunken);
 
   &--xs { width: 20px; height: 20px; }
   &--sm { width: 28px; height: 28px; }
@@ -187,7 +187,7 @@
     width: 22px;
     height: 4px;
     border-radius: 2px;
-    background: #d0d5dd;
+    background: var(--border-strong);
 
     &--short { width: 14px; }
   }
@@ -263,7 +263,7 @@
     width: 36px;
     height: 4px;
     border-radius: 2px;
-    background: #e4e7ec;
+    background: var(--surface-sunken);
     margin: 10px auto 2px;
   }
 

@@ -32,6 +32,8 @@
   --radius-xl: 28px;
   --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 6px 20px rgba(16, 24, 40, 0.04);
   --shadow-sheet: 0 -12px 40px rgba(16, 24, 40, 0.18);
+  --skeleton-base: #eef1f5;
+  --skeleton-highlight: #f7f8fa;
   /* Global text scale, changed from Settings → 外观 (H5 reads this at runtime).
    * The previous "特大" (1.24) is now the baseline. */
   --font-scale: 1.24;
@@ -59,8 +61,8 @@ body {
   height: 100%;
   margin: 0;
   padding: 0;
-  background-color: #f5f6f8;
-  color: #101828;
+  background-color: var(--bg);
+  color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica,
     'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -87,6 +89,11 @@ body {
   border-top: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.96) !important;
   backdrop-filter: blur(12px);
+}
+
+html.theme-dark .taro-tabbar__tabbar {
+  background: rgba(23, 26, 33, 0.96) !important;
+  border-top-color: var(--border);
 }
 
 .taro-tabbar__tabbar .weui-tabbar__item {
@@ -215,4 +222,65 @@ html.density-comfortable {
   .tree-node__row {
     padding: 14px 14px;
   }
+}
+
+/* Dark theme: the appearance store toggles `theme-dark` on <html>.
+ * Every component reads its colours from the tokens above, so overriding
+ * them here is enough for cards, sheets, inputs and Markdown. */
+html.theme-dark {
+  --bg: #0f1115;
+  --surface: #171a21;
+  --surface-muted: #1c2027;
+  --surface-sunken: #22262f;
+  --text: #f2f4f7;
+  --text-secondary: #b6becb;
+  --text-tertiary: #8b93a3;
+  --border: #2a2f3a;
+  --border-strong: #3a4150;
+  --primary: #6b9bff;
+  --primary-strong: #8ab0ff;
+  --primary-soft: #1b2b4d;
+  --danger: #f97066;
+  --danger-soft: #3a1d1d;
+  --success: #32d583;
+  --warning: #fdb022;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 20px rgba(0, 0, 0, 0.35);
+  --shadow-sheet: 0 -12px 40px rgba(0, 0, 0, 0.5);
+  --skeleton-base: #22262f;
+  --skeleton-highlight: #2d323d;
+}
+
+html.theme-dark,
+html.theme-dark body {
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+html.theme-dark .weui-tabbar {
+  background-color: var(--surface) !important;
+}
+
+html.theme-dark .weui-tabbar__label {
+  color: var(--text-tertiary) !important;
+}
+
+html.theme-dark .weui-bar__item_on .weui-tabbar__label {
+  color: var(--primary) !important;
+}
+
+html.theme-dark .taro-tabbar__border-white {
+  border-top-color: var(--border) !important;
+}
+
+/* The Taro H5 shell (outside `.screen`) otherwise keeps its white default. */
+html.theme-dark .taro_page {
+  background-color: var(--bg) !important;
+}
+
+html.theme-dark .taro-tabbar__panel {
+  background-color: var(--bg) !important;
+}
+
+html.theme-dark #app {
+  background-color: var(--bg) !important;
 }

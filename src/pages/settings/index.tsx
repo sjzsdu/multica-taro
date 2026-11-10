@@ -5,9 +5,15 @@ import { useAuthGuard } from '@/hooks/use-auth-guard'
 import { useArchivedInbox, useUnreadSummary } from '@/hooks/use-api'
 import { useAuthStore } from '@/stores/auth-store'
 import { useWorkspaceStore } from '@/stores/workspace-store'
-import { useAppearanceStore, type Density, type FontScale, type TaskView } from '@/stores/appearance-store'
+import { useAppearanceStore, type Density, type FontScale, type TaskView, type Theme } from '@/stores/appearance-store'
 import { TabBadge } from '@/components/tab-badge'
 import './index.scss'
+
+const THEME_OPTIONS: { key: Theme; label: string }[] = [
+  { key: 'light', label: '浅色' },
+  { key: 'dark', label: '深色' },
+  { key: 'system', label: '跟随系统' },
+]
 
 const FONT_SCALE_OPTIONS: { key: FontScale; label: string }[] = [
   { key: 'normal', label: '标准' },
@@ -39,6 +45,8 @@ export default function SettingsPage() {
   const setTaskView = useAppearanceStore((state) => state.setTaskView)
   const autoRefresh = useAppearanceStore((state) => state.autoRefresh)
   const setAutoRefresh = useAppearanceStore((state) => state.setAutoRefresh)
+  const theme = useAppearanceStore((state) => state.theme)
+  const setTheme = useAppearanceStore((state) => state.setTheme)
   const unread = useUnreadSummary()
   const inbox = useArchivedInbox()
 
@@ -108,6 +116,23 @@ export default function SettingsPage() {
         <View className='settings__group'>
           <Text className='settings__group-title'>外观</Text>
           <View className='settings__card'>
+            <View className='settings__row settings__row--stack'>
+              <Text className='settings__row-label'>主题</Text>
+              <View className='settings__segmented'>
+                {THEME_OPTIONS.map((option) => (
+                  <Text
+                    key={option.key}
+                    className={`settings__segment ${
+                      theme === option.key ? 'is-active' : ''
+                    }`}
+                    onClick={() => setTheme(option.key)}
+                  >
+                    {option.label}
+                  </Text>
+                ))}
+              </View>
+            </View>
+
             <View className='settings__row settings__row--stack'>
               <Text className='settings__row-label'>字体大小</Text>
               <View className='settings__segmented'>
