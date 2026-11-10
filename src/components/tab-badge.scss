@@ -1,0 +1,25 @@
+.tab-badge {
+  position: fixed;
+  z-index: 999;
+  left: calc(16.6667% + 7px);
+  bottom: calc(50px + env(safe-area-inset-bottom) + 26px);
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border-radius: 9px;
+  background: #f04438;
+  border: 1.5px solid #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  box-shadow: 0 1px 4px rgba(16, 24, 40, 0.18);
+}
+
+.tab-badge__text {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+}

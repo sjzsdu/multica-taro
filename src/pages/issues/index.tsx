@@ -14,10 +14,13 @@ import {
   StatusBadge,
 } from '@/components/ui'
 import { useAuthGuard } from '@/hooks/use-auth-guard'
-import { useActors, useChildProgress, useIssueChildren, useIssues, useMembers } from '@/hooks/use-api'
+import { useActors, useBatchUpdateIssues, useChildProgress, useIssueChildren, useIssues, useMembers } from '@/hooks/use-api'
 import { useAuthStore } from '@/stores/auth-store'
+import { useAppearanceStore } from '@/stores/appearance-store'
 import { errorMessage } from '@/api/client'
 import type { ListIssuesParams, Issue } from '@/api/types'
+import { TabBadge } from '@/components/tab-badge'
+import { ListSkeleton } from '@/components/skeleton'
 import { formatDate, isOverdue, priorityMeta, STATUS_ORDER } from '@/utils/format'
 import './index.scss'
 
@@ -34,17 +37,39 @@ function IssueCard({
   issue,
   onOpen,
   findActor,
+  selectionMode,
+  selected,
+  onToggleSelect,
+  onLongPress,
 }: {
   issue: Issue
   onOpen: () => void
   findActor: ReturnType<typeof useActors>['find']
+  selectionMode: boolean
+  selected: boolean
+  onToggleSelect: () => void
+  onLongPress: () => void
 }) {
   const assignee = findActor(issue.assignee_type, issue.assignee_id)
   const priority = priorityMeta(issue.priority)
   const overdue = isOverdue(issue.due_date)
 
   return (
-    <View className='issue-card' onClick={onOpen}>
+    <View
+      className={`issue-card ${selectionMode ? 'is-selection' : ''} ${
+        selected ? 'is-selected' : ''
+      }`}
+      onClick={selectionMode ? onToggleSelect : onOpen}
+      onLongPress={(event) => {
+        event.stopPropagation()
+        onLongPress()
+      }}
+    >
+      {selectionMode ? (
+        <View className={`issue-card__check ${selected ? 'is-checked' : ''}`}>
+          {selected ? <Text className='issue-card__check-mark'>✓</Text> : null}
+        </View>
+      ) : null}
       <View className='issue-card__head'>
         <Text className='issue-card__identifier'>{issue.identifier}</Text>
         <View className='issue-card__head-right'>
@@ -227,6 +252,9 @@ export default function IssuesPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [statusSheetOpen, setStatusSheetOpen] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const batchUpdate = useBatchUpdateIssues()
 
   const debouncedSearch = useDebounced(search)
 
@@ -235,8 +263,14 @@ export default function IssuesPage() {
     return (members.data ?? []).find((member) => member.user_id === user.id)?.id
   }, [members.data, user])
 
-  const [viewMode, setViewMode] = useState<'list' | 'tree'>('list')
+  const taskViewPreference = useAppearanceStore((state) => state.taskView)
+  const setTaskViewPreference = useAppearanceStore((state) => state.setTaskView)
+  const [viewMode, setViewMode] = useState<'list' | 'tree'>(taskViewPreference)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    setViewMode(taskViewPreference)
+  }, [taskViewPreference])
 
   const filters = useMemo<Omit<ListIssuesParams, 'limit' | 'offset'>>(() => {
     const next: Omit<ListIssuesParams, 'limit' | 'offset'> = {
@@ -282,6 +316,41 @@ export default function IssuesPage() {
       else next.add(id)
       return next
     })
+  }
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const enterSelection = (id: string) => {
+    setSelectionMode(true)
+    setSelectedIds(new Set([id]))
+  }
+
+  const exitSelection = () => {
+    setSelectionMode(false)
+    setSelectedIds(new Set())
+  }
+
+  const handleBatchStatus = (status: string) => {
+    if (selectedIds.size === 0 || batchUpdate.isPending) return
+    batchUpdate.mutate(
+      { ids: [...selectedIds], updates: { status } },
+      {
+        onSuccess: (result) => {
+          Taro.showToast({
+            title: `已更新 ${result.updated} 个任务`,
+            icon: 'none',
+          })
+          exitSelection()
+        },
+      },
+    )
   }
 
   const currentIssues = viewMode === 'tree' ? rootIssues : issues
@@ -330,7 +399,11 @@ export default function IssuesPage() {
           <View className='issues__actions'>
             <View
               className='issues__view-toggle'
-              onClick={() => setViewMode((mode) => (mode === 'list' ? 'tree' : 'list'))}
+              onClick={() => {
+                const next = viewMode === 'list' ? 'tree' : 'list'
+                setViewMode(next)
+                setTaskViewPreference(next)
+              }}
             >
               <Text className='issues__view-toggle-text'>
                 {viewMode === 'list' ? '树形' : '列表'}
@@ -398,7 +471,7 @@ export default function IssuesPage() {
         }}
         lowerThreshold={80}
       >
-        {query.isLoading ? <Spinner label='加载任务…' /> : null}
+        {query.isLoading ? <ListSkeleton rows={5} /> : null}
 
         {query.isError ? (
           <InlineError message={errorMessage(query.error)} onRetry={() => void query.refetch()} />
@@ -437,6 +510,10 @@ export default function IssuesPage() {
                 key={issue.id}
                 issue={issue}
                 findActor={actors.find}
+                selectionMode={selectionMode}
+                selected={selectedIds.has(issue.id)}
+                onToggleSelect={() => toggleSelected(issue.id)}
+                onLongPress={() => enterSelection(issue.id)}
                 onOpen={() =>
                   void Taro.navigateTo({ url: `/pages/issue-detail/index?id=${issue.id}` })
                 }
@@ -455,7 +532,7 @@ export default function IssuesPage() {
           <Text className='issues__more'>没有更多了</Text>
         ) : null}
 
-        <View className='issues__bottom-space' />
+        <View className={`issues__bottom-space ${selectionMode ? 'is-selection' : ''}`} />
       </ScrollView>
 
       <OptionSheet
@@ -469,6 +546,33 @@ export default function IssuesPage() {
         }}
         onClose={() => setStatusSheetOpen(false)}
       />
+
+      {selectionMode ? (
+        <View className='issues__batch-bar'>
+          <View className='issues__batch-head'>
+            <Text className='issues__batch-count'>已选 {selectedIds.size} 个</Text>
+            <Text className='issues__batch-cancel' onClick={exitSelection}>
+              取消
+            </Text>
+          </View>
+          <View className='issues__batch-actions'>
+            {[
+              { status: 'done', label: '已完成' },
+              { status: 'in_progress', label: '进行中' },
+              { status: 'todo', label: '待处理' },
+            ].map((action) => (
+              <Text
+                key={action.status}
+                className='issues__batch-action'
+                onClick={() => handleBatchStatus(action.status)}
+              >
+                {action.label}
+              </Text>
+            ))}
+          </View>
+        </View>
+      ) : null}
+      <TabBadge />
     </View>
   )
 }

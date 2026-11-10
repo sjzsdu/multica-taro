@@ -5,13 +5,25 @@ import { useAuthGuard } from '@/hooks/use-auth-guard'
 import { useArchivedInbox, useUnreadSummary } from '@/hooks/use-api'
 import { useAuthStore } from '@/stores/auth-store'
 import { useWorkspaceStore } from '@/stores/workspace-store'
-import { useAppearanceStore, type FontScale } from '@/stores/appearance-store'
+import { useAppearanceStore, type Density, type FontScale, type TaskView } from '@/stores/appearance-store'
+import { TabBadge } from '@/components/tab-badge'
 import './index.scss'
 
 const FONT_SCALE_OPTIONS: { key: FontScale; label: string }[] = [
   { key: 'normal', label: '标准' },
   { key: 'large', label: '大' },
   { key: 'xlarge', label: '特大' },
+]
+
+const DENSITY_OPTIONS: { key: Density; label: string }[] = [
+  { key: 'compact', label: '紧凑' },
+  { key: 'cozy', label: '标准' },
+  { key: 'comfortable', label: '宽松' },
+]
+
+const TASK_VIEW_OPTIONS: { key: TaskView; label: string }[] = [
+  { key: 'list', label: '列表' },
+  { key: 'tree', label: '树形' },
 ]
 
 export default function SettingsPage() {
@@ -21,6 +33,12 @@ export default function SettingsPage() {
   const workspace = useWorkspaceStore((state) => state.currentWorkspace)
   const fontScale = useAppearanceStore((state) => state.fontScale)
   const setFontScale = useAppearanceStore((state) => state.setFontScale)
+  const density = useAppearanceStore((state) => state.density)
+  const setDensity = useAppearanceStore((state) => state.setDensity)
+  const taskView = useAppearanceStore((state) => state.taskView)
+  const setTaskView = useAppearanceStore((state) => state.setTaskView)
+  const autoRefresh = useAppearanceStore((state) => state.autoRefresh)
+  const setAutoRefresh = useAppearanceStore((state) => state.setAutoRefresh)
   const unread = useUnreadSummary()
   const inbox = useArchivedInbox()
 
@@ -106,6 +124,53 @@ export default function SettingsPage() {
                 ))}
               </View>
             </View>
+
+            <View className='settings__row settings__row--stack'>
+              <Text className='settings__row-label'>列表密度</Text>
+              <View className='settings__segmented'>
+                {DENSITY_OPTIONS.map((option) => (
+                  <Text
+                    key={option.key}
+                    className={`settings__segment ${
+                      density === option.key ? 'is-active' : ''
+                    }`}
+                    onClick={() => setDensity(option.key)}
+                  >
+                    {option.label}
+                  </Text>
+                ))}
+              </View>
+            </View>
+
+            <View className='settings__row settings__row--stack'>
+              <Text className='settings__row-label'>默认任务视图</Text>
+              <View className='settings__segmented'>
+                {TASK_VIEW_OPTIONS.map((option) => (
+                  <Text
+                    key={option.key}
+                    className={`settings__segment ${
+                      taskView === option.key ? 'is-active' : ''
+                    }`}
+                    onClick={() => setTaskView(option.key)}
+                  >
+                    {option.label}
+                  </Text>
+                ))}
+              </View>
+            </View>
+
+            <View className='settings__row'>
+              <View className='settings__switch-label'>
+                <Text className='settings__row-label'>自动刷新收件箱</Text>
+                <Text className='settings__switch-hint'>每 60 秒检查新通知</Text>
+              </View>
+              <View
+                className={`settings__switch ${autoRefresh ? 'is-on' : ''}`}
+                onClick={() => setAutoRefresh(!autoRefresh)}
+              >
+                <View className='settings__switch-thumb' />
+              </View>
+            </View>
           </View>
         </View>
 
@@ -130,6 +195,7 @@ export default function SettingsPage() {
         <Text className='settings__footnote'>Multica · 人和智能体协作处理任务</Text>
         <View className='settings__bottom-space' />
       </ScrollView>
+      <TabBadge />
     </View>
   )
 }

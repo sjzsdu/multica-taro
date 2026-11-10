@@ -4,6 +4,7 @@ import { queryClient } from './utils/query-client'
 import { useAuthStore, installAuthInterceptor } from '@/stores/auth-store'
 import { useWorkspaceStore } from '@/stores/workspace-store'
 import { useWorkspaceBootstrap } from '@/hooks/use-workspace-bootstrap'
+import { useTabBadge } from '@/hooks/use-tab-badge'
 import { registerServiceWorker } from '@/utils/register-sw'
 import { useRealtime } from '@/realtime/realtime-bridge'
 import { useAppearanceStore } from '@/stores/appearance-store'
@@ -23,6 +24,7 @@ function Bootstrap({ children }: PropsWithChildren) {
   }, [initAuth, initWorkspace, initAppearance])
 
   useWorkspaceBootstrap()
+  useTabBadge()
   useRealtime()
 
   return <>{children}</>

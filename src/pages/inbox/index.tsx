@@ -18,6 +18,8 @@ import { useWorkspaceStore } from '@/stores/workspace-store'
 import { errorMessage } from '@/api/client'
 import type { InboxItem } from '@/api/types'
 import { inboxAccent, inboxTypeLabel, formatRelativeTime } from '@/utils/format'
+import { TabBadge } from '@/components/tab-badge'
+import { ListSkeleton } from '@/components/skeleton'
 import './index.scss'
 
 type Filter = 'all' | 'unread'
@@ -27,14 +29,23 @@ function InboxRow({
   onOpen,
   onToggleRead,
   onArchive,
+  onLongPress,
 }: {
   item: InboxItem
   onOpen: () => void
   onToggleRead: () => void
   onArchive: () => void
+  onLongPress: () => void
 }) {
   return (
-    <View className={`inbox-row ${item.read ? '' : 'is-unread'}`} onClick={onOpen}>
+    <View
+      className={`inbox-row ${item.read ? '' : 'is-unread'}`}
+      onClick={onOpen}
+      onLongPress={(event) => {
+        event.stopPropagation()
+        onLongPress()
+      }}
+    >
       <View className='inbox-row__accent' style={{ background: inboxAccent(item) }} />
       <View className='inbox-row__main'>
         <View className='inbox-row__top'>
@@ -120,6 +131,21 @@ export default function InboxPage() {
       showCancel: false,
       confirmText: '知道了',
     })
+  }
+
+  const handleLongPress = async (item: InboxItem) => {
+    try {
+      const result = await Taro.showActionSheet({
+        itemList: [item.read ? '标为未读' : '标为已读', '归档', '取消'],
+      })
+      if (result.tapIndex === 0) {
+        setRead.mutate({ id: item.id, read: !item.read })
+      } else if (result.tapIndex === 1) {
+        archive.mutate(item.id)
+      }
+    } catch {
+      // Dismissed.
+    }
   }
 
   const handleMenuSelect = async (key: string) => {
@@ -220,7 +246,7 @@ export default function InboxPage() {
         refresherTriggered={refreshing}
         onRefresherRefresh={handleRefresh}
       >
-        {isLoading && !items ? <Spinner label='加载通知…' /> : null}
+        {isLoading && !items ? <ListSkeleton rows={5} /> : null}
         {isError ? (
           <InlineError message={errorMessage(error)} onRetry={() => void refetch()} />
         ) : null}
@@ -242,6 +268,7 @@ export default function InboxPage() {
                 setRead.mutate({ id: item.id, read: !item.read })
               }
               onArchive={() => archive.mutate(item.id)}
+              onLongPress={() => void handleLongPress(item)}
             />
           ))}
         </View>
@@ -256,6 +283,7 @@ export default function InboxPage() {
         onSelect={handleMenuSelect}
         onClose={() => setMenuOpen(false)}
       />
+      <TabBadge />
     </View>
   )
 }

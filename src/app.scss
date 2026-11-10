@@ -32,8 +32,9 @@
   --radius-xl: 28px;
   --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 6px 20px rgba(16, 24, 40, 0.04);
   --shadow-sheet: 0 -12px 40px rgba(16, 24, 40, 0.18);
-  /* Global text scale, changed from Settings → 外观 (H5 reads this at runtime). */
-  --font-scale: 1;
+  /* Global text scale, changed from Settings → 外观 (H5 reads this at runtime).
+   * The previous "特大" (1.24) is now the baseline. */
+  --font-scale: 1.24;
 }
 
 :root {
@@ -171,4 +172,47 @@ body {
   width: 0;
   height: 0;
   display: none;
+}
+
+/* List density (H5): the root class is toggled by the appearance store. */
+html.density-compact {
+  .issues__cards,
+  .inbox__rows {
+    gap: 7px;
+  }
+
+  .issue-card {
+    padding: 10px 14px 10px;
+  }
+
+  .inbox-row__main {
+    padding: 10px 12px 9px 11px;
+  }
+
+  .inbox-row__body {
+    -webkit-line-clamp: 1;
+  }
+
+  .tree-node__row {
+    padding: 8px 10px;
+  }
+}
+
+html.density-comfortable {
+  .issues__cards,
+  .inbox__rows {
+    gap: 14px;
+  }
+
+  .issue-card {
+    padding: 18px 18px 16px;
+  }
+
+  .inbox-row__main {
+    padding: 18px 16px 16px 15px;
+  }
+
+  .tree-node__row {
+    padding: 14px 14px;
+  }
 }

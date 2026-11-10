@@ -63,6 +63,16 @@ export function updateIssue(id: string, data: UpdateIssueRequest): Promise<Issue
   return getApiClient().put<Issue>(`/api/issues/${id}`, data)
 }
 
+export function batchUpdateIssues(
+  issueIds: string[],
+  updates: UpdateIssueRequest,
+): Promise<{ updated: number }> {
+  return getApiClient().post<{ updated: number }>('/api/issues/batch-update', {
+    issue_ids: issueIds,
+    updates,
+  })
+}
+
 export function deleteIssue(id: string): Promise<void> {
   return getApiClient().delete<void>(`/api/issues/${id}`)
 }
@@ -77,11 +87,13 @@ export function createComment(
   issueId: string,
   content: string,
   attachmentIds?: string[],
+  parentId?: string,
 ): Promise<import('../types').Comment> {
   return getApiClient().post(`/api/issues/${issueId}/comments`, {
     content,
     type: 'comment',
     ...(attachmentIds && attachmentIds.length > 0 ? { attachment_ids: attachmentIds } : {}),
+    ...(parentId ? { parent_id: parentId } : {}),
   })
 }
 

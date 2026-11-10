@@ -748,3 +748,81 @@
     white-space: normal;
   }
 }
+
+.detail {
+  &__reply-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    background: var(--primary-soft);
+    border-bottom: 1px solid var(--border);
+  }
+
+  &__reply-bar-text {
+    font-size: 12px;
+    color: var(--primary);
+  }
+
+  &__reply-bar-cancel {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  &__mention-bar {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 14px 0;
+    white-space: nowrap;
+  }
+
+  &__mention {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 8px;
+    padding: 6px 10px;
+    background: var(--surface-sunken);
+    border-radius: 999px;
+  }
+
+  &__mention-name {
+    font-size: 12px;
+    color: var(--text);
+  }
+
+  &__mention-hint {
+    font-size: 10px;
+    color: var(--text-tertiary);
+  }
+}
+
+.timeline {
+  &__comment-head {
+    flex-wrap: wrap;
+  }
+
+  &__time {
+    margin-left: auto;
+  }
+
+  &__reply-to {
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+
+  &__reply {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--primary);
+  }
+
+  &__comment.is-reply {
+    margin-left: 28px;
+  }
+
+  &__comment.is-reply &__comment-content {
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+}

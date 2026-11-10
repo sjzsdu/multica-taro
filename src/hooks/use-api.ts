@@ -20,6 +20,7 @@ import type {
 } from '@/api/types'
 import { useAuthStore } from '@/stores/auth-store'
 import { useWorkspaceStore } from '@/stores/workspace-store'
+import { useAppearanceStore } from '@/stores/appearance-store'
 import { errorMessage } from '@/api/client'
 
 const PAGE_SIZE = 20
@@ -41,6 +42,7 @@ export const queryKeys = {
   issue: (slug: string | null, id: string) => ['workspace', slug, 'issue', id] as const,
   timeline: (slug: string | null, id: string) => ['workspace', slug, 'issue', id, 'timeline'] as const,
   inbox: (slug: string | null) => ['workspace', slug, 'inbox'] as const,
+  unreadCount: (slug: string | null) => ['workspace', slug, 'inbox', 'unread-count'] as const,
   inboxArchived: (slug: string | null) => ['workspace', slug, 'inbox', 'archived'] as const,
   unreadSummary: () => ['inbox', 'unread-summary'] as const,
 }
@@ -222,11 +224,13 @@ export function useIssueTimeline(id: string) {
 
 export function useInbox() {
   const slug = useSlug()
+  const autoRefresh = useAppearanceStore((state) => state.autoRefresh)
   return useQuery({
     queryKey: queryKeys.inbox(slug),
     queryFn: () => inboxApi.listInbox(),
     enabled: !!slug,
     staleTime: 15_000,
+    refetchInterval: autoRefresh ? 60_000 : false,
   })
 }
 
@@ -236,6 +240,18 @@ export function useArchivedInbox() {
     queryKey: queryKeys.inboxArchived(slug),
     queryFn: () => inboxApi.listArchivedInbox(),
     enabled: !!slug,
+  })
+}
+
+export function useUnreadCount() {
+  const slug = useSlug()
+  const autoRefresh = useAppearanceStore((state) => state.autoRefresh)
+  return useQuery({
+    queryKey: queryKeys.unreadCount(slug),
+    queryFn: () => inboxApi.getUnreadCount().then((res) => res.count),
+    enabled: !!slug,
+    staleTime: 15_000,
+    refetchInterval: autoRefresh ? 30_000 : false,
   })
 }
 
@@ -412,12 +428,33 @@ export function useUpdateIssue() {
   })
 }
 
+export function useBatchUpdateIssues() {
+  const queryClient = useQueryClient()
+  const slug = useSlug()
+  return useMutation({
+    mutationFn: ({ ids, updates }: { ids: string[]; updates: UpdateIssueRequest }) =>
+      issuesApi.batchUpdateIssues(ids, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.issues(slug) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.inbox(slug) })
+    },
+    onError: (err) => Taro.showToast({ title: errorMessage(err), icon: 'none' }),
+  })
+}
+
 export function useCreateComment(issueId: string) {
   const queryClient = useQueryClient()
   const slug = useSlug()
   return useMutation({
-    mutationFn: ({ content, attachmentIds }: { content: string; attachmentIds?: string[] }) =>
-      issuesApi.createComment(issueId, content, attachmentIds),
+    mutationFn: ({
+      content,
+      attachmentIds,
+      parentId,
+    }: {
+      content: string
+      attachmentIds?: string[]
+      parentId?: string
+    }) => issuesApi.createComment(issueId, content, attachmentIds, parentId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.timeline(slug, issueId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.issue(slug, issueId) })

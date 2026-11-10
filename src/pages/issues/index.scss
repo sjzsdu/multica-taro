@@ -358,3 +358,91 @@
     color: var(--text-tertiary);
   }
 }
+
+.issue-card.is-selection {
+  padding-left: 44px;
+}
+
+.issue-card.is-selected {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.issue-card__check {
+  position: absolute;
+  left: 14px;
+  top: 16px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.issue-card__check.is-checked {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.issue-card__check-mark {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+}
+
+.issues__batch-bar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(50px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 720px;
+  box-sizing: border-box;
+  z-index: 900;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 16px rgba(16, 24, 40, 0.06);
+}
+
+.issues__batch-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.issues__batch-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.issues__batch-cancel {
+  font-size: 12px;
+  color: var(--primary);
+}
+
+.issues__batch-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.issues__batch-action {
+  flex: 1;
+  padding: 9px 0;
+  border-radius: 10px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.issues__bottom-space.is-selection {
+  height: calc(170px + env(safe-area-inset-bottom));
+}

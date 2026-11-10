@@ -21,6 +21,7 @@ import {
   useProjects,
   useUpdateIssue,
 } from '@/hooks/use-api'
+import type { ActorOption } from '@/hooks/use-api'
 import { errorMessage } from '@/api/client'
 import * as issuesApi from '@/api/endpoints/issues'
 import type { Attachment, IssuePriority, TimelineEntry } from '@/api/types'
@@ -44,6 +45,13 @@ interface PendingImage {
   path: string
   id?: string
   uploading: boolean
+}
+
+interface MentionMarker {
+  name: string
+  fullName: string
+  type: 'member' | 'agent' | 'squad'
+  id: string
 }
 
 export default function IssueDetailPage() {
@@ -80,6 +88,13 @@ export default function IssueDetailPage() {
         })),
     [timeline],
   )
+  const commentMap = useMemo(() => {
+    const map = new Map<string, TimelineEntry>()
+    for (const entry of timeline) {
+      if (entry.type === 'comment') map.set(entry.id, entry)
+    }
+    return map
+  }, [timeline])
   const description = issue?.description ?? ''
   const { blocks: descriptionBlocks, headings } = useMemo(
     () => parseMarkdown(description),
@@ -94,8 +109,54 @@ export default function IssueDetailPage() {
   const [editingDescription, setEditingDescription] = useState(false)
   const [descriptionDraft, setDescriptionDraft] = useState('')
   const [commentDraft, setCommentDraft] = useState('')
+  const draftKey = `comment_draft_${issueId}`
+
+  useEffect(() => {
+    const saved = Taro.getStorageSync(draftKey)
+    setCommentDraft(typeof saved === 'string' ? saved : '')
+  }, [draftKey])
+
+  useEffect(() => {
+    if (!issueId) return
+    if (commentDraft.trim()) {
+      Taro.setStorageSync(draftKey, commentDraft)
+    } else {
+      Taro.removeStorageSync(draftKey)
+    }
+  }, [commentDraft, draftKey, issueId])
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
   const [composerFocused, setComposerFocused] = useState(false)
+  const [replyTo, setReplyTo] = useState<{ id: string; author: string } | null>(null)
+  const [mentions, setMentions] = useState<MentionMarker[]>([])
+  const mentionMatch = commentDraft.match(/(?:^|\s)@([^\s@]*)$/)
+  const mentionQuery = mentionMatch ? mentionMatch[1] : null
+  const mentionCandidates = useMemo(() => {
+    if (mentionQuery === null) return []
+    const query = mentionQuery.toLowerCase()
+    return actors.options
+      .filter((option) => !query || option.name.toLowerCase().includes(query))
+      .slice(0, 6)
+  }, [mentionQuery, actors.options])
+
+  const insertMention = (option: ActorOption) => {
+    const shortName = option.name.split(/\s+/)[0]
+    setCommentDraft((prev) => prev.replace(/@([^\s@]*)$/, `@${shortName} `))
+    setMentions((prev) => [
+      ...prev,
+      { name: shortName, fullName: option.name, type: option.type, id: option.id },
+    ])
+  }
+
+  const serializeMentions = (text: string): string => {
+    let content = text
+    for (const marker of mentions) {
+      content = content.replace(
+        `@${marker.name}`,
+        `[@${marker.fullName}](mention://${marker.type}/${marker.id})`,
+      )
+    }
+    return content
+  }
   const [refreshing, setRefreshing] = useState(false)
   const viewportHeight = useKeyboardViewport()
 
@@ -173,6 +234,7 @@ export default function IssueDetailPage() {
       const result = await Taro.chooseImage({
         count: 6 - pendingImages.length,
         sizeType: ['compressed'],
+        sourceType: ['album', 'camera'],
       })
       paths = result.tempFilePaths ?? []
     } catch {
@@ -214,8 +276,8 @@ export default function IssueDetailPage() {
   }
 
   const handleSendComment = () => {
-    const content = commentDraft.trim()
-    if (!content || createComment.isPending) return
+    const rawContent = commentDraft.trim()
+    if (!rawContent || createComment.isPending) return
     if (pendingImages.some((item) => item.uploading)) {
       Taro.showToast({ title: '图片还在上传中', icon: 'none' })
       return
@@ -226,12 +288,19 @@ export default function IssueDetailPage() {
       .filter((id): id is string => Boolean(id))
 
     createComment.mutate(
-      { content, attachmentIds },
+      {
+        content: serializeMentions(rawContent),
+        attachmentIds,
+        parentId: replyTo?.id,
+      },
       {
         onError: notifyError,
         onSuccess: () => {
+          Taro.removeStorageSync(draftKey)
           setCommentDraft('')
           setPendingImages([])
+          setMentions([])
+          setReplyTo(null)
         },
       },
     )
@@ -522,7 +591,17 @@ export default function IssueDetailPage() {
 
           <View className='timeline'>
             {timeline.map((entry) => (
-              <TimelineRow key={`${entry.type}-${entry.id}`} entry={entry} />
+              <TimelineRow
+                key={`${entry.type}-${entry.id}`}
+                entry={entry}
+                parent={entry.parent_id ? commentMap.get(entry.parent_id) : undefined}
+                onReply={(target) =>
+                  setReplyTo({
+                    id: target.id,
+                    author: target.actor_name || '成员',
+                  })
+                }
+              />
             ))}
           </View>
         </View>
@@ -531,6 +610,34 @@ export default function IssueDetailPage() {
       </ScrollView>
 
       <View className='detail__composer-area'>
+        {replyTo ? (
+          <View className='detail__reply-bar'>
+            <Text className='detail__reply-bar-text'>回复 {replyTo.author}</Text>
+            <Text
+              className='detail__reply-bar-cancel'
+              onClick={() => setReplyTo(null)}
+            >
+              取消
+            </Text>
+          </View>
+        ) : null}
+
+        {mentionCandidates.length > 0 ? (
+          <ScrollView scrollX className='detail__mention-bar'>
+            {mentionCandidates.map((option) => (
+              <View
+                key={option.key}
+                className='detail__mention'
+                onClick={() => insertMention(option)}
+              >
+                <Avatar src={option.avatarUrl} name={option.name} size='xs' />
+                <Text className='detail__mention-name'>{option.name}</Text>
+                <Text className='detail__mention-hint'>{option.hint}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        ) : null}
+
         {pendingImages.length > 0 ? (
           <ScrollView scrollX className='detail__attachments'>
             {pendingImages.map((item) => (
@@ -644,7 +751,15 @@ export default function IssueDetailPage() {
 }
 
 
-function TimelineRow({ entry }: { entry: TimelineEntry }) {
+function TimelineRow({
+  entry,
+  parent,
+  onReply,
+}: {
+  entry: TimelineEntry
+  parent?: TimelineEntry
+  onReply?: (entry: TimelineEntry) => void
+}) {
   const content = entry.content?.trim() || (entry.deleted_at ? '该评论已删除' : '')
   const commentBlocks = useMemo(() => parseMarkdown(content).blocks, [content])
 
@@ -668,12 +783,25 @@ function TimelineRow({ entry }: { entry: TimelineEntry }) {
     .filter((url): url is string => Boolean(url))
 
   return (
-    <View id={`comment-${entry.id}`} className='timeline__comment'>
+    <View
+      id={`comment-${entry.id}`}
+      className={`timeline__comment ${parent ? 'is-reply' : ''}`}
+    >
       <Avatar src={entry.actor_avatar_url} name={entry.actor_name || '成员'} size='sm' />
       <View className='timeline__comment-body'>
         <View className='timeline__comment-head'>
           <Text className='timeline__comment-author'>{entry.actor_name || '成员'}</Text>
+          {parent ? (
+            <Text className='timeline__reply-to'>
+              回复 {parent.actor_name || '成员'}
+            </Text>
+          ) : null}
           <Text className='timeline__time'>{formatRelativeTime(entry.created_at)}</Text>
+          {onReply ? (
+            <Text className='timeline__reply' onClick={() => onReply(entry)}>
+              回复
+            </Text>
+          ) : null}
         </View>
         <View className='timeline__comment-content'>
           <MarkdownBody blocks={commentBlocks} withAnchors={false} compact />
@@ -693,6 +821,7 @@ function TimelineRow({ entry }: { entry: TimelineEntry }) {
                     className='timeline__attachment-image'
                     src={src}
                     mode='widthFix'
+                    lazyLoad
                     onClick={() =>
                       void Taro.previewImage({ urls: imageUrls, current: src })
                     }
