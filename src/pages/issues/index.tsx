@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, ScrollView, Input } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 import {
@@ -17,6 +17,7 @@ import { useAuthGuard } from '@/hooks/use-auth-guard'
 import { useActors, useBatchUpdateIssues, useChildProgress, useIssueChildren, useIssues, useMembers } from '@/hooks/use-api'
 import { useAuthStore } from '@/stores/auth-store'
 import { useAppearanceStore } from '@/stores/appearance-store'
+import { useWorkspaceStore } from '@/stores/workspace-store'
 import { errorMessage } from '@/api/client'
 import type { ListIssuesParams, Issue } from '@/api/types'
 import { TabBadge } from '@/components/tab-badge'
@@ -25,6 +26,9 @@ import { formatDate, isOverdue, priorityMeta, STATUS_ORDER } from '@/utils/forma
 import './index.scss'
 
 type QuickView = 'all' | 'mine' | 'in_progress' | 'done'
+
+/** List scroll offsets per workspace + filter combination. */
+const issueListScrollPositions = new Map<string, number>()
 
 const QUICK_VIEWS: { key: QuickView; label: string }[] = [
   { key: 'all', label: '全部' },
@@ -254,9 +258,12 @@ export default function IssuesPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [restoreScrollTop, setRestoreScrollTop] = useState<number | undefined>(undefined)
+  const scrollControlledRef = useRef(false)
   const batchUpdate = useBatchUpdateIssues()
 
   const debouncedSearch = useDebounced(search)
+  const slug = useWorkspaceStore((state) => state.currentSlug)
 
   const currentMemberId = useMemo(() => {
     if (!user) return undefined
@@ -286,6 +293,23 @@ export default function IssuesPage() {
     if (view === 'mine' && currentMemberId) next.assignee_id = currentMemberId
     return next
   }, [debouncedSearch, view, statusFilter, currentMemberId])
+
+  const listScrollKey = `${slug ?? ''}|${viewMode}|${view}|${statusFilter}|${debouncedSearch}|${
+    currentMemberId ?? ''
+  }`
+
+  useEffect(() => {
+    const saved = issueListScrollPositions.get(listScrollKey) ?? 0
+    if (process.env.TARO_ENV === 'h5') {
+      const timer = setTimeout(() => {
+        const el = document.querySelector('.issues__list') as HTMLElement | null
+        if (el) el.scrollTop = saved
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+    setRestoreScrollTop(saved)
+    scrollControlledRef.current = true
+  }, [listScrollKey])
 
   const listQuery = useIssues(filters, viewMode === 'list')
   const treeFilters = useMemo(() => ({ ...filters, top_level_only: true }), [filters])
@@ -463,6 +487,15 @@ export default function IssuesPage() {
       <ScrollView
         className='screen__body issues__list'
         scrollY
+        scrollTop={process.env.TARO_ENV === 'h5' ? undefined : restoreScrollTop}
+        onScroll={(event) => {
+          const top = event.detail.scrollTop
+          issueListScrollPositions.set(listScrollKey, top)
+          if (process.env.TARO_ENV !== 'h5' && scrollControlledRef.current) {
+            scrollControlledRef.current = false
+            setRestoreScrollTop(undefined)
+          }
+        }}
         refresherEnabled
         refresherTriggered={refreshing}
         onRefresherRefresh={handleRefresh}

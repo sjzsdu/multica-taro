@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, ScrollView, Textarea, Input, Picker, Image } from '@tarojs/components'
 import Taro, { useRouter } from '@tarojs/taro'
 import {
@@ -53,6 +53,9 @@ interface MentionMarker {
   type: 'member' | 'agent' | 'squad'
   id: string
 }
+
+/** Per-issue scroll offsets, kept for the lifetime of the H5 session. */
+const detailScrollPositions = new Map<string, number>()
 
 export default function IssueDetailPage() {
   const status = useAuthGuard()
@@ -109,7 +112,38 @@ export default function IssueDetailPage() {
   const [editingDescription, setEditingDescription] = useState(false)
   const [descriptionDraft, setDescriptionDraft] = useState('')
   const [commentDraft, setCommentDraft] = useState('')
+  const [restoreScrollTop, setRestoreScrollTop] = useState<number | undefined>(undefined)
+  const restoredScrollIssueRef = useRef<string | null>(null)
+  const scrollSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const draftKey = `comment_draft_${issueId}`
+
+  useEffect(() => {
+    if (!issueId || !issueQuery.isSuccess) return
+    if (restoredScrollIssueRef.current === issueId) return
+    restoredScrollIssueRef.current = issueId
+    setRestoreScrollTop(detailScrollPositions.get(issueId) ?? 0)
+  }, [issueId, issueQuery.isSuccess])
+
+  useEffect(
+    () => () => {
+      if (scrollSyncTimerRef.current) clearTimeout(scrollSyncTimerRef.current)
+    },
+    [],
+  )
+
+  const handleDetailScroll = (event: { detail: { scrollTop: number } }) => {
+    if (!issueId) return
+    const top = event.detail.scrollTop
+    detailScrollPositions.set(issueId, top)
+    // Keep the controlled value in sync with the user's scrolling. Without
+    // this, React re-renders (comments, realtime, TOC) snap back to the old
+    // offset and the page feels stuck in the middle.
+    if (scrollSyncTimerRef.current) return
+    scrollSyncTimerRef.current = setTimeout(() => {
+      scrollSyncTimerRef.current = null
+      setRestoreScrollTop(detailScrollPositions.get(issueId) ?? 0)
+    }, 150)
+  }
 
   useEffect(() => {
     const saved = Taro.getStorageSync(draftKey)
@@ -410,11 +444,14 @@ export default function IssueDetailPage() {
       <ScrollView
         className='detail__scroll'
         scrollY
+        scrollTop={restoreScrollTop}
+        onScroll={handleDetailScroll}
         scrollIntoView={scrollTarget || undefined}
         refresherEnabled
         refresherTriggered={refreshing}
         onRefresherRefresh={handleRefresh}
       >
+        <View id='detail-top' />
         <View className='detail__header'>
           <View className='detail__kicker'>
             <Text className='detail__identifier'>{issue.identifier}</Text>
@@ -729,6 +766,7 @@ export default function IssueDetailPage() {
         title='快速定位'
         subtitle='跳到描述标题或成员评论'
         options={[
+          { key: 'detail-top', label: '回到顶部' },
           ...headings.map((heading) => ({
             key: heading.id,
             label: `${'　'.repeat(Math.max(0, heading.level - 1))}${heading.label}`,
@@ -741,8 +779,17 @@ export default function IssueDetailPage() {
         ]}
         onSelect={(key) => {
           setTocOpen(false)
+          if (key === 'detail-top') {
+            setRestoreScrollTop(0)
+            detailScrollPositions.set(issueId, 0)
+            return
+          }
+          if (process.env.TARO_ENV === 'h5') {
+            document.getElementById(key)?.scrollIntoView({ block: 'start' })
+            return
+          }
           setScrollTarget(key)
-          setTimeout(() => setScrollTarget(''), 400)
+          setTimeout(() => setScrollTarget(''), 800)
         }}
         onClose={() => setTocOpen(false)}
       />

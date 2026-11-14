@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, ScrollView } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 import {
@@ -23,6 +23,9 @@ import { ListSkeleton } from '@/components/skeleton'
 import './index.scss'
 
 type Filter = 'all' | 'unread'
+
+/** Inbox scroll offsets per workspace + filter. */
+const inboxScrollPositions = new Map<string, number>()
 
 function InboxRow({
   item,
@@ -99,6 +102,22 @@ export default function InboxPage() {
   const [filter, setFilter] = useState<Filter>('all')
   const [menuOpen, setMenuOpen] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [restoreScrollTop, setRestoreScrollTop] = useState<number | undefined>(undefined)
+  const scrollControlledRef = useRef(false)
+  const scrollKey = `${workspace?.slug ?? ''}|${filter}`
+
+  useEffect(() => {
+    const saved = inboxScrollPositions.get(scrollKey) ?? 0
+    if (process.env.TARO_ENV === 'h5') {
+      const timer = setTimeout(() => {
+        const el = document.querySelector('.inbox__list') as HTMLElement | null
+        if (el) el.scrollTop = saved
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+    setRestoreScrollTop(saved)
+    scrollControlledRef.current = true
+  }, [scrollKey])
 
   useDidShow(() => {
     if (status === 'authenticated') void refetch()
@@ -242,6 +261,14 @@ export default function InboxPage() {
       <ScrollView
         className='screen__body inbox__list'
         scrollY
+        scrollTop={process.env.TARO_ENV === 'h5' ? undefined : restoreScrollTop}
+        onScroll={(event) => {
+          inboxScrollPositions.set(scrollKey, event.detail.scrollTop)
+          if (process.env.TARO_ENV !== 'h5' && scrollControlledRef.current) {
+            scrollControlledRef.current = false
+            setRestoreScrollTop(undefined)
+          }
+        }}
         refresherEnabled
         refresherTriggered={refreshing}
         onRefresherRefresh={handleRefresh}

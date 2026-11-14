@@ -157,7 +157,7 @@
     max-width: 720px;
     margin: 0 auto;
     padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
-    background: rgba(245, 246, 248, 0.96);
+    background: var(--bg);
     border-top: 1px solid var(--border);
     backdrop-filter: blur(12px);
   }
