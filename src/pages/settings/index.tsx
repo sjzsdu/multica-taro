@@ -1,6 +1,7 @@
+import { useState } from 'react'
 import { View, Text, ScrollView } from '@tarojs/components'
 import Taro from '@tarojs/taro'
-import { Avatar, Chevron, PageHeader, Spinner } from '@/components/ui'
+import { Avatar, BottomSheet, Chevron, PageHeader, Spinner } from '@/components/ui'
 import { useAuthGuard } from '@/hooks/use-auth-guard'
 import { useArchivedInbox, useUnreadSummary } from '@/hooks/use-api'
 import { useAuthStore } from '@/stores/auth-store'
@@ -54,6 +55,17 @@ export default function SettingsPage() {
     ? (unread.data ?? []).find((entry) => entry.workspace_id === workspace.id)?.count ?? 0
     : 0
   const archivedCount = inbox.data?.length ?? 0
+  const [appearanceOpen, setAppearanceOpen] = useState(false)
+  const [aboutOpen, setAboutOpen] = useState(false)
+
+  const appearanceSummary = [theme, fontScale, density]
+    .map((key, index) => {
+      if (index === 0) return THEME_OPTIONS.find((option) => option.key === key)?.label
+      if (index === 1) return FONT_SCALE_OPTIONS.find((option) => option.key === key)?.label
+      return DENSITY_OPTIONS.find((option) => option.key === key)?.label
+    })
+    .filter(Boolean)
+    .join(' · ')
 
   const handleLogout = async () => {
     const result = await Taro.showModal({
@@ -114,101 +126,21 @@ export default function SettingsPage() {
         </View>
 
         <View className='settings__group'>
-          <Text className='settings__group-title'>外观</Text>
+          <Text className='settings__group-title'>偏好</Text>
           <View className='settings__card'>
-            <View className='settings__row settings__row--stack'>
-              <Text className='settings__row-label'>主题</Text>
-              <View className='settings__segmented'>
-                {THEME_OPTIONS.map((option) => (
-                  <Text
-                    key={option.key}
-                    className={`settings__segment ${
-                      theme === option.key ? 'is-active' : ''
-                    }`}
-                    onClick={() => setTheme(option.key)}
-                  >
-                    {option.label}
-                  </Text>
-                ))}
+            <View className='settings__row' onClick={() => setAppearanceOpen(true)}>
+              <Text className='settings__row-label'>外观</Text>
+              <View className='settings__row-value'>
+                <Text className='settings__summary'>{appearanceSummary}</Text>
+                <Chevron />
               </View>
             </View>
-
-            <View className='settings__row settings__row--stack'>
-              <Text className='settings__row-label'>字体大小</Text>
-              <View className='settings__segmented'>
-                {FONT_SCALE_OPTIONS.map((option) => (
-                  <Text
-                    key={option.key}
-                    className={`settings__segment ${
-                      fontScale === option.key ? 'is-active' : ''
-                    }`}
-                    onClick={() => setFontScale(option.key)}
-                  >
-                    {option.label}
-                  </Text>
-                ))}
+            <View className='settings__row' onClick={() => setAboutOpen(true)}>
+              <Text className='settings__row-label'>关于</Text>
+              <View className='settings__row-value'>
+                <Text className='settings__row-text'>0.1.0</Text>
+                <Chevron />
               </View>
-            </View>
-
-            <View className='settings__row settings__row--stack'>
-              <Text className='settings__row-label'>列表密度</Text>
-              <View className='settings__segmented'>
-                {DENSITY_OPTIONS.map((option) => (
-                  <Text
-                    key={option.key}
-                    className={`settings__segment ${
-                      density === option.key ? 'is-active' : ''
-                    }`}
-                    onClick={() => setDensity(option.key)}
-                  >
-                    {option.label}
-                  </Text>
-                ))}
-              </View>
-            </View>
-
-            <View className='settings__row settings__row--stack'>
-              <Text className='settings__row-label'>默认任务视图</Text>
-              <View className='settings__segmented'>
-                {TASK_VIEW_OPTIONS.map((option) => (
-                  <Text
-                    key={option.key}
-                    className={`settings__segment ${
-                      taskView === option.key ? 'is-active' : ''
-                    }`}
-                    onClick={() => setTaskView(option.key)}
-                  >
-                    {option.label}
-                  </Text>
-                ))}
-              </View>
-            </View>
-
-            <View className='settings__row'>
-              <View className='settings__switch-label'>
-                <Text className='settings__row-label'>自动刷新收件箱</Text>
-                <Text className='settings__switch-hint'>每 60 秒检查新通知</Text>
-              </View>
-              <View
-                className={`settings__switch ${autoRefresh ? 'is-on' : ''}`}
-                onClick={() => setAutoRefresh(!autoRefresh)}
-              >
-                <View className='settings__switch-thumb' />
-              </View>
-            </View>
-          </View>
-        </View>
-
-        <View className='settings__group'>
-          <Text className='settings__group-title'>关于</Text>
-          <View className='settings__card'>
-            <View className='settings__row'>
-              <Text className='settings__row-label'>客户端版本</Text>
-              <Text className='settings__row-text'>0.1.0</Text>
-            </View>
-            <View className='settings__row'>
-              <Text className='settings__row-label'>服务端</Text>
-              <Text className='settings__row-text'>multica.wnbgj.com</Text>
             </View>
           </View>
         </View>
@@ -220,6 +152,115 @@ export default function SettingsPage() {
         <Text className='settings__footnote'>Multica · 人和智能体协作处理任务</Text>
         <View className='settings__bottom-space' />
       </ScrollView>
+      <BottomSheet
+        visible={appearanceOpen}
+        title='外观'
+        subtitle='只影响本机显示'
+        onClose={() => setAppearanceOpen(false)}
+      >
+        <View className='settings__sheet-body'>
+          <View className='settings__sheet-item'>
+            <Text className='settings__row-label'>主题</Text>
+            <View className='settings__segmented'>
+              {THEME_OPTIONS.map((option) => (
+                <Text
+                  key={option.key}
+                  className={`settings__segment ${
+                    theme === option.key ? 'is-active' : ''
+                  }`}
+                  onClick={() => setTheme(option.key)}
+                >
+                  {option.label}
+                </Text>
+              ))}
+            </View>
+          </View>
+
+          <View className='settings__sheet-item'>
+            <Text className='settings__row-label'>字体大小</Text>
+            <View className='settings__segmented'>
+              {FONT_SCALE_OPTIONS.map((option) => (
+                <Text
+                  key={option.key}
+                  className={`settings__segment ${
+                    fontScale === option.key ? 'is-active' : ''
+                  }`}
+                  onClick={() => setFontScale(option.key)}
+                >
+                  {option.label}
+                </Text>
+              ))}
+            </View>
+          </View>
+
+          <View className='settings__sheet-item'>
+            <Text className='settings__row-label'>列表密度</Text>
+            <View className='settings__segmented'>
+              {DENSITY_OPTIONS.map((option) => (
+                <Text
+                  key={option.key}
+                  className={`settings__segment ${
+                    density === option.key ? 'is-active' : ''
+                  }`}
+                  onClick={() => setDensity(option.key)}
+                >
+                  {option.label}
+                </Text>
+              ))}
+            </View>
+          </View>
+
+          <View className='settings__sheet-item'>
+            <Text className='settings__row-label'>默认任务视图</Text>
+            <View className='settings__segmented'>
+              {TASK_VIEW_OPTIONS.map((option) => (
+                <Text
+                  key={option.key}
+                  className={`settings__segment ${
+                    taskView === option.key ? 'is-active' : ''
+                  }`}
+                  onClick={() => setTaskView(option.key)}
+                >
+                  {option.label}
+                </Text>
+              ))}
+            </View>
+          </View>
+
+          <View className='settings__sheet-item settings__sheet-item--row'>
+            <View className='settings__switch-label'>
+              <Text className='settings__row-label'>自动刷新收件箱</Text>
+              <Text className='settings__switch-hint'>每 60 秒检查新通知</Text>
+            </View>
+            <View
+              className={`settings__switch ${autoRefresh ? 'is-on' : ''}`}
+              onClick={() => setAutoRefresh(!autoRefresh)}
+            >
+              <View className='settings__switch-thumb' />
+            </View>
+          </View>
+        </View>
+      </BottomSheet>
+
+      <BottomSheet
+        visible={aboutOpen}
+        title='关于'
+        onClose={() => setAboutOpen(false)}
+      >
+        <View className='settings__sheet-body'>
+          <View className='settings__card'>
+            <View className='settings__row'>
+              <Text className='settings__row-label'>客户端版本</Text>
+              <Text className='settings__row-text'>0.1.0</Text>
+            </View>
+            <View className='settings__row'>
+              <Text className='settings__row-label'>服务端</Text>
+              <Text className='settings__row-text'>multica.wnbgj.com</Text>
+            </View>
+          </View>
+        </View>
+      </BottomSheet>
+
       <TabBadge />
     </View>
   )

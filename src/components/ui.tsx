@@ -248,6 +248,46 @@ export function OptionSheet({
 }
 
 /* ------------------------------------------------------------------ */
+/* Bottom sheet with arbitrary content                                 */
+/* ------------------------------------------------------------------ */
+
+export function BottomSheet({
+  visible,
+  title,
+  subtitle,
+  onClose,
+  children,
+}: {
+  visible: boolean
+  title: string
+  subtitle?: string
+  onClose: () => void
+  children: ReactNode
+}) {
+  if (!visible) return null
+  return (
+    <View className='ui-sheet' catchMove>
+      <View className='ui-sheet__mask' onClick={onClose} />
+      <View className='ui-sheet__panel'>
+        <View className='ui-sheet__handle' />
+        <View className='ui-sheet__header'>
+          <View>
+            <Text className='ui-sheet__title'>{title}</Text>
+            {subtitle ? <Text className='ui-sheet__subtitle'>{subtitle}</Text> : null}
+          </View>
+          <View className='ui-sheet__close' onClick={onClose}>
+            <Text className='ui-sheet__close-text'>关闭</Text>
+          </View>
+        </View>
+        <ScrollView scrollY className='ui-sheet__body'>
+          {children}
+        </ScrollView>
+      </View>
+    </View>
+  )
+}
+
+/* ------------------------------------------------------------------ */
 /* Misc                                                                */
 /* ------------------------------------------------------------------ */
 
