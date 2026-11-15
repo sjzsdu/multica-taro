@@ -58,6 +58,9 @@ interface MentionMarker {
 /** Per-issue scroll offsets, kept for the lifetime of the H5 session. */
 const detailScrollPositions = new Map<string, number>()
 
+/** Older timeline entries are rendered on demand to keep long issues light. */
+const TIMELINE_PAGE_SIZE = 40
+
 export default function IssueDetailPage() {
   const status = useAuthGuard()
   const router = useRouter()
@@ -113,17 +116,33 @@ export default function IssueDetailPage() {
   const [editingDescription, setEditingDescription] = useState(false)
   const [descriptionDraft, setDescriptionDraft] = useState('')
   const [commentDraft, setCommentDraft] = useState('')
+  const [visibleTimelineCount, setVisibleTimelineCount] = useState(TIMELINE_PAGE_SIZE)
   const [restoreScrollTop, setRestoreScrollTop] = useState<number | undefined>(undefined)
   const restoredScrollIssueRef = useRef<string | null>(null)
   const scrollSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const draftKey = `comment_draft_${issueId}`
 
   useEffect(() => {
-    if (!issueId || !issueQuery.isSuccess) return
+    setVisibleTimelineCount(TIMELINE_PAGE_SIZE)
+  }, [issueId])
+
+  useEffect(() => {
+    if (!issueId || !issueQuery.isSuccess || !timelineQuery.isSuccess) return
     if (restoredScrollIssueRef.current === issueId) return
     restoredScrollIssueRef.current = issueId
-    setRestoreScrollTop(detailScrollPositions.get(issueId) ?? 0)
-  }, [issueId, issueQuery.isSuccess])
+    const saved = detailScrollPositions.get(issueId) ?? 0
+    // Going back to an old position needs the full list, otherwise the saved
+    // scrollTop gets clamped to the shorter first page.
+    if (saved > 0 && timeline.length > TIMELINE_PAGE_SIZE) {
+      setVisibleTimelineCount(timeline.length)
+    }
+    setRestoreScrollTop(saved)
+  }, [issueId, issueQuery.isSuccess, timelineQuery.isSuccess, timeline.length])
+
+  const visibleTimeline = useMemo(() => {
+    if (timeline.length <= visibleTimelineCount) return timeline
+    return timeline.slice(timeline.length - visibleTimelineCount)
+  }, [timeline, visibleTimelineCount])
 
   useEffect(
     () => () => {
@@ -643,7 +662,19 @@ export default function IssueDetailPage() {
           ) : null}
 
           <View className='timeline'>
-            {timeline.map((entry) => (
+            {timeline.length > visibleTimelineCount ? (
+              <View
+                className='timeline__more'
+                onClick={() =>
+                  setVisibleTimelineCount((count) => count + TIMELINE_PAGE_SIZE)
+                }
+              >
+                <Text className='timeline__more-text'>
+                  显示更早的 {timeline.length - visibleTimelineCount} 条
+                </Text>
+              </View>
+            ) : null}
+            {visibleTimeline.map((entry) => (
               <TimelineRow
                 key={`${entry.type}-${entry.id}`}
                 entry={entry}
@@ -810,6 +841,22 @@ export default function IssueDetailPage() {
             setRestoreScrollTop(0)
             detailScrollPositions.set(issueId, 0)
             return
+          }
+          if (key.startsWith('comment-')) {
+            const target =
+              process.env.TARO_ENV === 'h5' ? document.getElementById(key) : null
+            if (!target) {
+              setVisibleTimelineCount(timeline.length)
+              setTimeout(() => {
+                if (process.env.TARO_ENV === 'h5') {
+                  document.getElementById(key)?.scrollIntoView({ block: 'start' })
+                } else {
+                  setScrollTarget(key)
+                  setTimeout(() => setScrollTarget(''), 800)
+                }
+              }, 120)
+              return
+            }
           }
           if (process.env.TARO_ENV === 'h5') {
             document.getElementById(key)?.scrollIntoView({ block: 'start' })
