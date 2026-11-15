@@ -113,11 +113,11 @@
   }
 
   &.is-active {
-    background: #101828;
-    border-color: #101828;
+    background: var(--text);
+    border-color: var(--text);
 
     .ui-chip__text {
-      color: #fff;
+      color: var(--surface);
       font-weight: 600;
     }
   }

@@ -56,7 +56,7 @@
   }
 
   &.is-unread {
-    border-color: #d7e3ff;
+    border-color: var(--primary-soft);
   }
 
   &__accent {
@@ -178,4 +178,13 @@
   font-size: 10px;
   font-weight: 600;
   line-height: 1.4;
+}
+
+.inbox-row__action {
+  font-size: calc(12px * var(--font-scale));
+  color: var(--text-secondary);
+  padding: 5px 10px;
+  margin: -5px 0;
+  border-radius: 999px;
+  background: var(--surface-sunken);
 }

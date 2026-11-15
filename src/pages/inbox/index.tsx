@@ -8,7 +8,6 @@ import {
   InlineError,
   OptionSheet,
   PageHeader,
-  PriorityMark,
   Spinner,
   StatusBadge,
 } from '@/components/ui'
@@ -26,71 +25,6 @@ type Filter = 'all' | 'unread'
 
 /** Inbox scroll offsets per workspace + filter. */
 const inboxScrollPositions = new Map<string, number>()
-
-function InboxRow({
-  item,
-  onOpen,
-  onToggleRead,
-  onArchive,
-  onLongPress,
-}: {
-  item: InboxItem
-  onOpen: () => void
-  onToggleRead: () => void
-  onArchive: () => void
-  onLongPress: () => void
-}) {
-  return (
-    <View
-      className={`inbox-row ${item.read ? '' : 'is-unread'}`}
-      onClick={onOpen}
-      onLongPress={(event) => {
-        event.stopPropagation()
-        onLongPress()
-      }}
-    >
-      <View className='inbox-row__accent' style={{ background: inboxAccent(item) }} />
-      <View className='inbox-row__main'>
-        <View className='inbox-row__top'>
-          <Text className='inbox-row__type'>{inboxTypeLabel(item.type)}</Text>
-          <Text className='inbox-row__time'>{formatRelativeTime(item.created_at)}</Text>
-        </View>
-        <Text className={`inbox-row__title ${item.read ? '' : 'is-unread'}`}>{item.title}</Text>
-        {item.body ? <Text className='inbox-row__body'>{item.body}</Text> : null}
-        <View className='inbox-row__bottom'>
-          <View className='inbox-row__meta'>
-            {item.issue_status ? (
-              <StatusBadge status={item.issue_status} compact />
-            ) : (
-              <Text className='inbox-row__system'>系统通知</Text>
-            )}
-            {item.issue_priority ? <PriorityMark priority={item.issue_priority} /> : null}
-          </View>
-          <View className='inbox-row__actions'>
-            <Text
-              className='inbox-row__action'
-              onClick={(event) => {
-                event.stopPropagation()
-                onToggleRead()
-              }}
-            >
-              {item.read ? '标为未读' : '标为已读'}
-            </Text>
-            <Text
-              className='inbox-row__action'
-              onClick={(event) => {
-                event.stopPropagation()
-                onArchive()
-              }}
-            >
-              归档
-            </Text>
-          </View>
-        </View>
-      </View>
-    </View>
-  )
-}
 
 interface InboxGroup {
   key: string
@@ -174,7 +108,6 @@ function InboxGroupRow({
             ) : (
               <Text className='inbox-row__system'>系统通知</Text>
             )}
-            {latest.issue_priority ? <PriorityMark priority={latest.issue_priority} /> : null}
           </View>
           <View className='inbox-row__actions'>
             <Text

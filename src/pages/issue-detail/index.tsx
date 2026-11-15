@@ -45,6 +45,7 @@ interface PendingImage {
   path: string
   id?: string
   uploading: boolean
+  error?: boolean
 }
 
 interface MentionMarker {
@@ -257,6 +258,31 @@ export default function IssueDetailPage() {
     )
   }
 
+  const uploadPendingImage = async (item: PendingImage) => {
+    setPendingImages((prev) =>
+      prev.map((entry) =>
+        entry.key === item.key ? { ...entry, uploading: true, error: false } : entry,
+      ),
+    )
+    try {
+      const attachment = await issuesApi.uploadFile(item.path)
+      setPendingImages((prev) =>
+        prev.map((entry) =>
+          entry.key === item.key
+            ? { ...entry, id: attachment.id, uploading: false, error: false }
+            : entry,
+        ),
+      )
+    } catch (err) {
+      setPendingImages((prev) =>
+        prev.map((entry) =>
+          entry.key === item.key ? { ...entry, uploading: false, error: true } : entry,
+        ),
+      )
+      notifyError(err)
+    }
+  }
+
   const handleChooseImage = async () => {
     if (pendingImages.length >= 6) {
       Taro.showToast({ title: '最多添加 6 张图片', icon: 'none' })
@@ -283,21 +309,7 @@ export default function IssueDetailPage() {
     }))
     setPendingImages((prev) => [...prev, ...items])
 
-    await Promise.all(
-      items.map(async (item) => {
-        try {
-          const attachment = await issuesApi.uploadFile(item.path)
-          setPendingImages((prev) =>
-            prev.map((entry) =>
-              entry.key === item.key ? { ...entry, id: attachment.id, uploading: false } : entry,
-            ),
-          )
-        } catch (err) {
-          setPendingImages((prev) => prev.filter((entry) => entry.key !== item.key))
-          notifyError(err)
-        }
-      }),
-    )
+    await Promise.all(items.map((item) => uploadPendingImage(item)))
   }
 
   const handleRemoveImage = (item: PendingImage) => {
@@ -314,6 +326,10 @@ export default function IssueDetailPage() {
     if (!rawContent || createComment.isPending) return
     if (pendingImages.some((item) => item.uploading)) {
       Taro.showToast({ title: '图片还在上传中', icon: 'none' })
+      return
+    }
+    if (pendingImages.some((item) => item.error)) {
+      Taro.showToast({ title: '有图片上传失败，请重试或删除', icon: 'none' })
       return
     }
 
@@ -678,11 +694,22 @@ export default function IssueDetailPage() {
         {pendingImages.length > 0 ? (
           <ScrollView scrollX className='detail__attachments'>
             {pendingImages.map((item) => (
-              <View key={item.key} className='detail__attachment'>
+              <View
+                key={item.key}
+                className={`detail__attachment ${item.error ? 'is-error' : ''}`}
+                onClick={() => {
+                  if (item.error) void uploadPendingImage(item)
+                }}
+              >
                 <Image className='detail__attachment-img' src={item.path} mode='aspectFill' />
                 {item.uploading ? (
                   <View className='detail__attachment-mask'>
                     <Text className='detail__attachment-mask-text'>上传中</Text>
+                  </View>
+                ) : null}
+                {item.error ? (
+                  <View className='detail__attachment-mask'>
+                    <Text className='detail__attachment-mask-text'>失败，点击重试</Text>
                   </View>
                 ) : null}
                 <View

@@ -284,3 +284,9 @@ html.theme-dark .taro-tabbar__panel {
 html.theme-dark #app {
   background-color: var(--bg) !important;
 }
+
+/* Status pills draw their text colour inline (per state); give them a neutral
+ * translucent backdrop in dark mode so the light pastel fills do not glare. */
+html.theme-dark .ui-status {
+  background: rgba(255, 255, 255, 0.1) !important;
+}

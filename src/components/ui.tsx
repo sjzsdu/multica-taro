@@ -88,7 +88,7 @@ export function PriorityMark({
             key={step}
             className={`ui-priority__bar ${step <= Math.max(level, 1) && level > 0 ? 'is-on' : ''}`}
             style={{
-              background: step <= level ? meta.color : '#D0D5DD',
+              background: step <= level ? meta.color : 'var(--border-strong)',
               height: `${6 + step * 3}px`,
             }}
           />
