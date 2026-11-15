@@ -19,6 +19,7 @@ import type { InboxItem } from '@/api/types'
 import { inboxAccent, inboxTypeLabel, formatRelativeTime } from '@/utils/format'
 import { TabBadge } from '@/components/tab-badge'
 import { ListSkeleton } from '@/components/skeleton'
+import { SearchSheet } from '@/components/search-sheet'
 import './index.scss'
 
 type Filter = 'all' | 'unread'
@@ -144,6 +145,7 @@ export default function InboxPage() {
 
   const [filter, setFilter] = useState<Filter>('all')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [restoreScrollTop, setRestoreScrollTop] = useState<number | undefined>(undefined)
   const scrollControlledRef = useRef(false)
@@ -299,6 +301,9 @@ export default function InboxPage() {
         right={
           <>
             {unreadCount > 0 ? <Badge count={unreadCount} /> : null}
+            <View className='inbox__batch-button' onClick={() => setSearchOpen(true)}>
+              <Text className='inbox__batch-text'>搜索</Text>
+            </View>
             <View className='inbox__batch-button' onClick={() => setMenuOpen(true)}>
               <Text className='inbox__batch-text'>批量</Text>
             </View>
@@ -364,6 +369,13 @@ export default function InboxPage() {
         options={menuOptions}
         onSelect={handleMenuSelect}
         onClose={() => setMenuOpen(false)}
+      />
+      <SearchSheet
+        visible={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        onOpenIssue={(id) =>
+          void Taro.navigateTo({ url: `/pages/issue-detail/index?id=${id}` })
+        }
       />
       <TabBadge />
     </View>

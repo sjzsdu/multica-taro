@@ -7,6 +7,7 @@ import type {
   IssueStatus,
   ListIssuesParams,
   ListIssuesResponse,
+  SearchIssuesResponse,
   Project,
   Squad,
   TimelineEntry,
@@ -36,6 +37,10 @@ export function listIssues(params?: ListIssuesParams): Promise<ListIssuesRespons
     sort: params?.sort_by,
     direction: params?.sort_direction,
   })
+}
+
+export function searchIssues(q: string, limit = 20): Promise<SearchIssuesResponse> {
+  return getApiClient().get<SearchIssuesResponse>('/api/issues/search', { q, limit })
 }
 
 export function getIssue(id: string): Promise<Issue> {

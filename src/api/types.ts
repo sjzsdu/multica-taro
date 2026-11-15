@@ -236,6 +236,17 @@ export interface ListIssuesResponse {
   total: number
 }
 
+export interface SearchIssueResult extends Issue {
+  match_source: 'title' | 'description' | 'comment' | string
+  matched_snippet?: string
+  matched_description_snippet?: string
+  matched_comment_snippet?: string
+}
+
+export interface SearchIssuesResponse {
+  issues: SearchIssueResult[]
+}
+
 export interface ListProjectsResponse {
   projects: Project[]
   total: number

@@ -12,6 +12,7 @@ import {
   SubPageHeader,
 } from '@/components/ui'
 import { useAuthGuard } from '@/hooks/use-auth-guard'
+import { useWorkspaceStore } from '@/stores/workspace-store'
 import {
   useActors,
   useCreateComment,
@@ -65,6 +66,7 @@ export default function IssueDetailPage() {
   const status = useAuthGuard()
   const router = useRouter()
   const issueId = router.params.id || ''
+  const workspaceSlug = useWorkspaceStore((state) => state.currentSlug)
 
   const issueQuery = useIssue(issueId)
   const timelineQuery = useIssueTimeline(issueId)
@@ -302,6 +304,21 @@ export default function IssueDetailPage() {
     }
   }
 
+  const handleShare = async () => {
+    if (!issue) return
+    const link = workspaceSlug
+      ? `https://multica.wnbgj.com/${workspaceSlug}/issues/${issue.id}`
+      : process.env.TARO_ENV === 'h5'
+        ? window.location.href
+        : issue.id
+    try {
+      await Taro.setClipboardData({ data: link })
+      Taro.showToast({ title: '链接已复制', icon: 'none' })
+    } catch {
+      Taro.showToast({ title: '复制失败', icon: 'none' })
+    }
+  }
+
   const handleChooseImage = async () => {
     if (pendingImages.length >= 6) {
       Taro.showToast({ title: '最多添加 6 张图片', icon: 'none' })
@@ -469,11 +486,16 @@ export default function IssueDetailPage() {
         title={issue.identifier}
         subtitle={issue.title.length > 22 ? `${issue.title.slice(0, 22)}…` : issue.title}
         right={
-          headings.length > 0 || commentAnchors.length > 0 ? (
-            <View className='detail__toc-btn' onClick={() => setTocOpen(true)}>
-              <Text className='detail__toc-btn-text'>目录</Text>
+          <View className='detail__header-actions'>
+            <View className='detail__toc-btn' onClick={() => void handleShare()}>
+              <Text className='detail__toc-btn-text'>分享</Text>
             </View>
-          ) : undefined
+            {headings.length > 0 || commentAnchors.length > 0 ? (
+              <View className='detail__toc-btn' onClick={() => setTocOpen(true)}>
+                <Text className='detail__toc-btn-text'>目录</Text>
+              </View>
+            ) : null}
+          </View>
         }
       />
       <ScrollView
