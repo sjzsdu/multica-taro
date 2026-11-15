@@ -269,8 +269,11 @@ function patchInboxCache(
   slug: string | null,
   updater: (items: InboxItem[]) => InboxItem[],
 ): void {
-  queryClient.setQueriesData<InboxItem[]>({ queryKey: queryKeys.inbox(slug) }, (old) =>
-    old ? updater(old) : old,
+  // `exact` is required: the inbox prefix also matches unread-count (number)
+  // and archived (array) queries, and patching those corrupts their caches.
+  queryClient.setQueriesData<InboxItem[]>(
+    { queryKey: queryKeys.inbox(slug), exact: true },
+    (old) => (Array.isArray(old) ? updater(old) : old),
   )
 }
 
@@ -296,6 +299,48 @@ export function useInboxActions() {
       return { previous }
     },
     onError: (err, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(queryKeys.inbox(slug), context.previous)
+      Taro.showToast({ title: errorMessage(err), icon: 'none' })
+    },
+    onSettled: invalidate,
+  })
+
+  const setManyRead = useMutation({
+    mutationFn: async ({ ids, read }: { ids: string[]; read: boolean }) => {
+      await Promise.all(
+        ids.map((id) => (read ? inboxApi.markRead(id) : inboxApi.markUnread(id))),
+      )
+    },
+    onMutate: async ({ ids, read }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.inbox(slug) })
+      const previous = queryClient.getQueryData<InboxItem[]>(queryKeys.inbox(slug))
+      const idSet = new Set(ids)
+      patchInboxCache(queryClient, slug, (items) =>
+        items.map((item) => (idSet.has(item.id) ? { ...item, read } : item)),
+      )
+      return { previous }
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(queryKeys.inbox(slug), context.previous)
+      Taro.showToast({ title: errorMessage(err), icon: 'none' })
+    },
+    onSettled: invalidate,
+  })
+
+  const archiveMany = useMutation({
+    mutationFn: async (ids: string[]) => {
+      await Promise.all(ids.map((id) => inboxApi.archiveItem(id)))
+    },
+    onMutate: async (ids) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.inbox(slug) })
+      const previous = queryClient.getQueryData<InboxItem[]>(queryKeys.inbox(slug))
+      const idSet = new Set(ids)
+      patchInboxCache(queryClient, slug, (items) =>
+        items.filter((item) => !idSet.has(item.id)),
+      )
+      return { previous }
+    },
+    onError: (err, _ids, context) => {
       if (context?.previous) queryClient.setQueryData(queryKeys.inbox(slug), context.previous)
       Taro.showToast({ title: errorMessage(err), icon: 'none' })
     },
@@ -379,7 +424,9 @@ export function useInboxActions() {
 
   return {
     setRead,
+    setManyRead,
     archive,
+    archiveMany,
     unarchive,
     markAllRead,
     archiveAllRead,

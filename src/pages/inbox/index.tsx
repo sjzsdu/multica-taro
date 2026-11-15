@@ -92,11 +92,121 @@ function InboxRow({
   )
 }
 
+interface InboxGroup {
+  key: string
+  issueId: string | null
+  items: InboxItem[]
+  latest: InboxItem
+  unreadCount: number
+}
+
+/** One row per issue: duplicate notifications (comments/status/runs) merge. */
+function groupInboxItems(items: InboxItem[]): InboxGroup[] {
+  const groups = new Map<string, InboxGroup>()
+  for (const item of items) {
+    const key = item.issue_id ? `issue:${item.issue_id}` : `item:${item.id}`
+    const existing = groups.get(key)
+    if (existing) {
+      existing.items.push(item)
+      if (item.created_at > existing.latest.created_at) existing.latest = item
+      if (!item.read) existing.unreadCount += 1
+    } else {
+      groups.set(key, {
+        key,
+        issueId: item.issue_id,
+        items: [item],
+        latest: item,
+        unreadCount: item.read ? 0 : 1,
+      })
+    }
+  }
+  return [...groups.values()].sort((a, b) =>
+    b.latest.created_at.localeCompare(a.latest.created_at),
+  )
+}
+
+function InboxGroupRow({
+  group,
+  onOpen,
+  onToggleRead,
+  onArchive,
+  onLongPress,
+}: {
+  group: InboxGroup
+  onOpen: () => void
+  onToggleRead: () => void
+  onArchive: () => void
+  onLongPress: () => void
+}) {
+  const latest = group.latest
+  const isRead = group.unreadCount === 0
+  return (
+    <View
+      className={`inbox-row ${isRead ? '' : 'is-unread'}`}
+      onClick={onOpen}
+      onLongPress={(event) => {
+        event.stopPropagation()
+        onLongPress()
+      }}
+    >
+      <View className='inbox-row__accent' style={{ background: inboxAccent(latest) }} />
+      <View className='inbox-row__main'>
+        <View className='inbox-row__top'>
+          <View className='inbox-row__type-wrap'>
+            <Text className='inbox-row__type'>{inboxTypeLabel(latest.type)}</Text>
+            {group.items.length > 1 ? (
+              <Text className='inbox-row__group-count'>{group.items.length} 条</Text>
+            ) : null}
+            {group.unreadCount > 0 ? (
+              <Text className='inbox-row__unread-count'>{group.unreadCount} 未读</Text>
+            ) : null}
+          </View>
+          <Text className='inbox-row__time'>{formatRelativeTime(latest.created_at)}</Text>
+        </View>
+        <Text className={`inbox-row__title ${isRead ? '' : 'is-unread'}`}>
+          {latest.title}
+        </Text>
+        {latest.body ? <Text className='inbox-row__body'>{latest.body}</Text> : null}
+        <View className='inbox-row__bottom'>
+          <View className='inbox-row__meta'>
+            {latest.issue_status ? (
+              <StatusBadge status={latest.issue_status} compact />
+            ) : (
+              <Text className='inbox-row__system'>系统通知</Text>
+            )}
+            {latest.issue_priority ? <PriorityMark priority={latest.issue_priority} /> : null}
+          </View>
+          <View className='inbox-row__actions'>
+            <Text
+              className='inbox-row__action'
+              onClick={(event) => {
+                event.stopPropagation()
+                onToggleRead()
+              }}
+            >
+              {isRead ? '标为未读' : '标为已读'}
+            </Text>
+            <Text
+              className='inbox-row__action'
+              onClick={(event) => {
+                event.stopPropagation()
+                onArchive()
+              }}
+            >
+              归档
+            </Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  )
+}
+
 export default function InboxPage() {
   const status = useAuthGuard()
   const workspace = useWorkspaceStore((state) => state.currentWorkspace)
   const { data: items, isLoading, isError, error, refetch } = useInbox()
-  const { setRead, archive, markAllRead, archiveAllRead, archiveAll, archiveCompleted } =
+  const { setRead, setManyRead, archive, archiveMany, markAllRead, archiveAllRead, archiveAll, archiveCompleted } =
     useInboxActions()
 
   const [filter, setFilter] = useState<Filter>('all')
@@ -124,10 +234,11 @@ export default function InboxPage() {
   })
 
   const unreadCount = useMemo(() => (items ?? []).filter((item) => !item.read).length, [items])
-  const visible = useMemo(() => {
-    const list = items ?? []
-    return filter === 'unread' ? list.filter((item) => !item.read) : list
-  }, [items, filter])
+  const groups = useMemo(() => groupInboxItems(items ?? []), [items])
+  const visibleGroups = useMemo(
+    () => (filter === 'unread' ? groups.filter((group) => group.unreadCount > 0) : groups),
+    [groups, filter],
+  )
 
   const handleRefresh = async () => {
     setRefreshing(true)
@@ -138,29 +249,42 @@ export default function InboxPage() {
     }
   }
 
-  const handleOpen = async (item: InboxItem) => {
-    if (!item.read) setRead.mutate({ id: item.id, read: true })
-    if (item.issue_id) {
-      await Taro.navigateTo({ url: `/pages/issue-detail/index?id=${item.issue_id}` })
+  const handleOpenGroup = async (group: InboxGroup) => {
+    const unreadIds = group.items.filter((item) => !item.read).map((item) => item.id)
+    if (unreadIds.length > 0) setManyRead.mutate({ ids: unreadIds, read: true })
+    if (group.issueId) {
+      await Taro.navigateTo({ url: `/pages/issue-detail/index?id=${group.issueId}` })
       return
     }
     Taro.showModal({
-      title: item.title,
-      content: item.body || '此通知没有更多内容。',
+      title: group.latest.title,
+      content: group.latest.body || '此通知没有更多内容。',
       showCancel: false,
       confirmText: '知道了',
     })
   }
 
-  const handleLongPress = async (item: InboxItem) => {
+  const handleToggleGroupRead = (group: InboxGroup) => {
+    const targetRead = group.unreadCount > 0
+    const ids = targetRead
+      ? group.items.filter((item) => !item.read).map((item) => item.id)
+      : group.items.map((item) => item.id)
+    if (ids.length > 0) setManyRead.mutate({ ids, read: targetRead })
+  }
+
+  const handleArchiveGroup = (group: InboxGroup) => {
+    archiveMany.mutate(group.items.map((item) => item.id))
+  }
+
+  const handleLongPressGroup = async (group: InboxGroup) => {
     try {
       const result = await Taro.showActionSheet({
-        itemList: [item.read ? '标为未读' : '标为已读', '归档', '取消'],
+        itemList: [group.unreadCount > 0 ? '标为已读' : '标为未读', '归档', '取消'],
       })
       if (result.tapIndex === 0) {
-        setRead.mutate({ id: item.id, read: !item.read })
+        handleToggleGroupRead(group)
       } else if (result.tapIndex === 1) {
-        archive.mutate(item.id)
+        handleArchiveGroup(group)
       }
     } catch {
       // Dismissed.
@@ -278,7 +402,7 @@ export default function InboxPage() {
           <InlineError message={errorMessage(error)} onRetry={() => void refetch()} />
         ) : null}
 
-        {!isLoading && !isError && visible.length === 0 ? (
+        {!isLoading && !isError && visibleGroups.length === 0 ? (
           <EmptyState
             title={filter === 'unread' ? '没有未读通知' : '收件箱已清空'}
             description='任务分配、评论提及和智能体运行结果都会出现在这里。'
@@ -286,16 +410,14 @@ export default function InboxPage() {
         ) : null}
 
         <View className='inbox__rows'>
-          {visible.map((item) => (
-            <InboxRow
-              key={item.id}
-              item={item}
-              onOpen={() => void handleOpen(item)}
-              onToggleRead={() =>
-                setRead.mutate({ id: item.id, read: !item.read })
-              }
-              onArchive={() => archive.mutate(item.id)}
-              onLongPress={() => void handleLongPress(item)}
+          {visibleGroups.map((group) => (
+            <InboxGroupRow
+              key={group.key}
+              group={group}
+              onOpen={() => void handleOpenGroup(group)}
+              onToggleRead={() => handleToggleGroupRead(group)}
+              onArchive={() => handleArchiveGroup(group)}
+              onLongPress={() => void handleLongPressGroup(group)}
             />
           ))}
         </View>
