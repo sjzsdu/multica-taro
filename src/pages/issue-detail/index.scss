@@ -850,3 +850,56 @@
   align-items: center;
   gap: 8px;
 }
+
+.detail__section-head-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.detail__new-round {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+
+  &.is-pending {
+    opacity: 0.6;
+  }
+}
+
+/* Each top-level comment is its own segment card, so the feed reads as
+ * distinct rounds separated by the collapsible activity runs — matching the
+ * desktop issue view. */
+.timeline__segment {
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
+}
+
+.timeline__activity-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px;
+}
+
+.timeline__activity-chevron {
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-tertiary);
+}
+
+.timeline__activity-count {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.timeline__activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+  padding-left: 1px;
+}

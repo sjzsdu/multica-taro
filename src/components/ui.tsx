@@ -1,4 +1,4 @@
-import { ReactNode } from 'react'
+import { ReactNode, useEffect } from 'react'
 import { View, Text, Image, ScrollView } from '@tarojs/components'
 import type { ITouchEvent } from '@tarojs/components'
 import Taro from '@tarojs/taro'
@@ -177,6 +177,22 @@ export function InlineError({ message, onRetry }: { message: string; onRetry?: (
 /* Sheet                                                               */
 /* ------------------------------------------------------------------ */
 
+/**
+ * H5 renders tab pages inside Taro's tab bar container, and the page creates
+ * its own stacking context at `z-index: 0`. A sheet inside the page is
+ * therefore painted underneath the tab bar (`z-index: 500`) even though the
+ * sheet itself sits at `z-index: 900` — its bottom ends up hidden behind the
+ * bar. While a sheet is open, lift the active page above the tab bar.
+ */
+function useSheetLayer(visible: boolean) {
+  useEffect(() => {
+    if (process.env.TARO_ENV !== 'h5' || !visible) return
+    const root = document.documentElement
+    root.classList.add('ui-sheet-open')
+    return () => root.classList.remove('ui-sheet-open')
+  }, [visible])
+}
+
 export interface SheetOption {
   key: string
   label: string
@@ -203,6 +219,7 @@ export function OptionSheet({
   onClose: () => void
   footer?: ReactNode
 }) {
+  useSheetLayer(visible)
   if (!visible) return null
   return (
     <View className='ui-sheet' catchMove>
@@ -264,6 +281,7 @@ export function BottomSheet({
   onClose: () => void
   children: ReactNode
 }) {
+  useSheetLayer(visible)
   if (!visible) return null
   return (
     <View className='ui-sheet' catchMove>

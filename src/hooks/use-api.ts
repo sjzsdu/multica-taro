@@ -509,6 +509,20 @@ export function useCreateComment(issueId: string) {
   })
 }
 
+/** Re-run the issue's current agent to start a new round (segment). */
+export function useRerunIssue(issueId: string) {
+  const queryClient = useQueryClient()
+  const slug = useSlug()
+  return useMutation({
+    mutationFn: () => issuesApi.rerunIssue(issueId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.timeline(slug, issueId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.issue(slug, issueId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.inbox(slug) })
+    },
+  })
+}
+
 export type {
   Agent,
   InboxItem,

@@ -20,6 +20,7 @@ import {
   useIssueChildren,
   useIssueTimeline,
   useProjects,
+  useRerunIssue,
   useUpdateIssue,
 } from '@/hooks/use-api'
 import type { ActorOption } from '@/hooks/use-api'
@@ -62,6 +63,37 @@ const detailScrollPositions = new Map<string, number>()
 /** Older timeline entries are rendered on demand to keep long issues light. */
 const TIMELINE_PAGE_SIZE = 40
 
+/**
+ * A row in the segmented timeline: either one comment (a segment card) or a
+ * run of consecutive activity entries folded into a single "N 条动态" row.
+ * Mirrors the desktop client's comment/activity grouping so status churn
+ * between comments collapses instead of flooding the feed.
+ */
+type TimelineGroupRow =
+  | { kind: 'comment'; key: string; entry: TimelineEntry }
+  | { kind: 'activity'; key: string; entries: TimelineEntry[] }
+
+function groupTimeline(entries: TimelineEntry[]): TimelineGroupRow[] {
+  const rows: TimelineGroupRow[] = []
+  let buffer: TimelineEntry[] = []
+  const flush = () => {
+    if (buffer.length > 0) {
+      rows.push({ kind: 'activity', key: `act-${buffer[0]!.id}`, entries: buffer })
+      buffer = []
+    }
+  }
+  for (const entry of entries) {
+    if (entry.type === 'comment') {
+      flush()
+      rows.push({ kind: 'comment', key: `comment-${entry.id}`, entry })
+    } else {
+      buffer.push(entry)
+    }
+  }
+  flush()
+  return rows
+}
+
 export default function IssueDetailPage() {
   const status = useAuthGuard()
   const router = useRouter()
@@ -75,6 +107,7 @@ export default function IssueDetailPage() {
   const parentQuery = useIssue(parentId)
   const updateIssue = useUpdateIssue()
   const createComment = useCreateComment(issueId)
+  const rerunIssue = useRerunIssue(issueId)
   const projects = useProjects()
   const actors = useActors()
 
@@ -145,6 +178,26 @@ export default function IssueDetailPage() {
     if (timeline.length <= visibleTimelineCount) return timeline
     return timeline.slice(timeline.length - visibleTimelineCount)
   }, [timeline, visibleTimelineCount])
+
+  // Segment the visible timeline into comment cards and collapsed activity
+  // runs. The most recent activity run starts expanded (answers "what just
+  // happened?"); older runs default to a single "N 条动态" summary line.
+  const groupRows = useMemo(() => groupTimeline(visibleTimeline), [visibleTimeline])
+  const lastActivityKey = useMemo(() => {
+    for (let i = groupRows.length - 1; i >= 0; i--) {
+      const row = groupRows[i]
+      if (row && row.kind === 'activity') return row.key
+    }
+    return null
+  }, [groupRows])
+  const [activityState, setActivityState] = useState<Record<string, boolean>>({})
+  const isActivityExpanded = (key: string): boolean => {
+    if (key in activityState) return activityState[key] === true
+    return key === lastActivityKey
+  }
+  const toggleActivity = (key: string) => {
+    setActivityState((prev) => ({ ...prev, [key]: !isActivityExpanded(key) }))
+  }
 
   useEffect(
     () => () => {
@@ -242,6 +295,14 @@ export default function IssueDetailPage() {
     } finally {
       setRefreshing(false)
     }
+  }
+
+  const handleStartNewRound = () => {
+    if (!issue || rerunIssue.isPending) return
+    rerunIssue.mutate(undefined, {
+      onSuccess: () => Taro.showToast({ title: '已开启新一轮', icon: 'none' }),
+      onError: notifyError,
+    })
   }
 
   const handleSaveTitle = () => {
@@ -674,7 +735,17 @@ export default function IssueDetailPage() {
         <View id='comments' className='detail__card detail__card--block'>
           <View className='detail__section-head'>
             <Text className='detail__section-title'>动态与评论</Text>
-            <Text className='detail__section-count'>{timeline.length}</Text>
+            <View className='detail__section-head-right'>
+              {issue.assignee_type === 'agent' ? (
+                <Text
+                  className={`detail__new-round ${rerunIssue.isPending ? 'is-pending' : ''}`}
+                  onClick={handleStartNewRound}
+                >
+                  {rerunIssue.isPending ? '开启中…' : '开启新一轮'}
+                </Text>
+              ) : null}
+              <Text className='detail__section-count'>{timeline.length}</Text>
+            </View>
           </View>
 
           {timelineQuery.isLoading ? <Spinner label='加载动态…' /> : null}
@@ -696,19 +767,42 @@ export default function IssueDetailPage() {
                 </Text>
               </View>
             ) : null}
-            {visibleTimeline.map((entry) => (
-              <TimelineRow
-                key={`${entry.type}-${entry.id}`}
-                entry={entry}
-                parent={entry.parent_id ? commentMap.get(entry.parent_id) : undefined}
-                onReply={(target) =>
-                  setReplyTo({
-                    id: target.id,
-                    author: target.actor_name || '成员',
-                  })
-                }
-              />
-            ))}
+            {groupRows.map((row) =>
+              row.kind === 'comment' ? (
+                row.entry.parent_id ? (
+                  <TimelineRow
+                    key={row.key}
+                    entry={row.entry}
+                    parent={commentMap.get(row.entry.parent_id)}
+                    onReply={(target) =>
+                      setReplyTo({
+                        id: target.id,
+                        author: target.actor_name || '成员',
+                      })
+                    }
+                  />
+                ) : (
+                  <View key={row.key} className='timeline__segment'>
+                    <TimelineRow
+                      entry={row.entry}
+                      onReply={(target) =>
+                        setReplyTo({
+                          id: target.id,
+                          author: target.actor_name || '成员',
+                        })
+                      }
+                    />
+                  </View>
+                )
+              ) : (
+                <ActivityGroup
+                  key={row.key}
+                  entries={row.entries}
+                  expanded={isActivityExpanded(row.key)}
+                  onToggle={() => toggleActivity(row.key)}
+                />
+              ),
+            )}
           </View>
         </View>
 
@@ -893,6 +987,39 @@ export default function IssueDetailPage() {
   )
 }
 
+/**
+ * A collapsed run of consecutive activity entries between two comment
+ * segments. Collapsed it shows a single "> N 条动态" summary; expanded it
+ * lists each activity via the shared TimelineRow renderer.
+ */
+function ActivityGroup({
+  entries,
+  expanded,
+  onToggle,
+}: {
+  entries: TimelineEntry[]
+  expanded: boolean
+  onToggle: () => void
+}) {
+  if (entries.length === 0) return null
+  return (
+    <View className={`timeline__activity-group ${expanded ? 'is-expanded' : ''}`}>
+      <View className='timeline__activity-toggle' onClick={onToggle}>
+        <Text className={`timeline__activity-chevron ${expanded ? 'is-open' : ''}`}>
+          {expanded ? '⌄' : '›'}
+        </Text>
+        <Text className='timeline__activity-count'>{entries.length} 条动态</Text>
+      </View>
+      {expanded ? (
+        <View className='timeline__activity-list'>
+          {entries.map((entry) => (
+            <TimelineRow key={`${entry.type}-${entry.id}`} entry={entry} />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  )
+}
 
 function TimelineRow({
   entry,

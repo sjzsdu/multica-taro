@@ -232,6 +232,12 @@
 }
 
 /* Sheet ------------------------------------------------------------------ */
+/* `useSheetLayer` in ui.tsx lifts the active H5 page while a sheet is open so
+ * the tab bar (z-index 500) does not paint over the sheet's bottom. */
+html.ui-sheet-open .taro_page.taro_page_show {
+  z-index: 1000;
+}
+
 .ui-sheet {
   position: fixed;
   inset: 0;
